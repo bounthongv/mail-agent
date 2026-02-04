@@ -1,0 +1,161 @@
+"""Configuration loader module."""
+import os
+import yaml
+from dataclasses import dataclass
+from typing import List, Optional
+
+
+@dataclass
+class EmailConfig:
+    email: str
+    imap_host: str
+    imap_port: int
+    password: str
+    enabled: bool
+
+
+@dataclass
+class TelegramConfig:
+    bot_token: str
+    chat_id: int
+
+
+@dataclass
+class OpenRouterConfig:
+    api_key: str
+
+
+@dataclass
+class DeepSeekConfig:
+    api_key: str
+
+
+@dataclass
+class GeminiConfig:
+    api_key: str
+
+
+@dataclass
+class LocalAIConfig:
+    enabled: bool
+    provider: str  # "qwen" or "ollama"
+    model: str
+
+
+@dataclass
+class ScheduleConfig:
+    enabled: bool
+    interval_hours: int
+
+
+@dataclass
+class AIConfig:
+    provider: str
+    model: str
+    max_tokens: int
+    temperature: float
+
+
+@dataclass
+class ReportConfig:
+    daily_summary: bool
+    max_emails_per_report: int
+
+
+@dataclass
+class AppConfig:
+    schedule: ScheduleConfig
+    ai: AIConfig
+    report: ReportConfig
+    emails: List[EmailConfig]
+    telegram: TelegramConfig
+    openrouter: OpenRouterConfig
+    deepseek: DeepSeekConfig
+    gemini: GeminiConfig
+    localai: LocalAIConfig
+
+
+def load_pattern_file(filepath: str) -> List[str]:
+    """Load patterns from text file, one per line."""
+    if not os.path.exists(filepath):
+        return []
+    with open(filepath, 'r', encoding='utf-8') as f:
+        return [line.strip() for line in f if line.strip()]
+
+
+def load_config(config_dir: str = "config") -> AppConfig:
+    """Load configuration from YAML files."""
+    base_path = os.path.dirname(os.path.abspath(__file__))
+    config_path = os.path.join(base_path, "..", config_dir)
+
+    settings_file = os.path.join(config_path, "settings.yaml")
+    credentials_file = os.path.join(config_path, "credentials.yaml")
+
+    with open(settings_file, 'r', encoding='utf-8') as f:
+        settings = yaml.safe_load(f)
+
+    with open(credentials_file, 'r', encoding='utf-8') as f:
+        credentials = yaml.safe_load(f)
+
+    schedule = ScheduleConfig(
+        enabled=settings['schedule']['enabled'],
+        interval_hours=settings['schedule']['interval_hours']
+    )
+
+    ai = AIConfig(
+        provider=settings['ai']['provider'],
+        model=settings['ai']['model'],
+        max_tokens=settings['ai']['max_tokens'],
+        temperature=settings['ai']['temperature']
+    )
+
+    report = ReportConfig(
+        daily_summary=settings['report']['daily_summary'],
+        max_emails_per_report=settings['report']['max_emails_per_report']
+    )
+
+    emails = [
+        EmailConfig(
+            email=e['email'],
+            imap_host=e['imap_host'],
+            imap_port=e['imap_port'],
+            password=e['password'],
+            enabled=e['enabled']
+        )
+        for e in credentials['emails']
+    ]
+
+    telegram = TelegramConfig(
+        bot_token=credentials['telegram']['bot_token'],
+        chat_id=credentials['telegram']['chat_id']
+    )
+
+    openrouter = OpenRouterConfig(
+        api_key=credentials['openrouter']['api_key']
+    )
+
+    deepseek = DeepSeekConfig(
+        api_key=credentials.get('deepseek', {}).get('api_key', '')
+    )
+
+    gemini = GeminiConfig(
+        api_key=credentials.get('gemini', {}).get('api_key', '')
+    )
+
+    localai = LocalAIConfig(
+        enabled=settings.get('localai', {}).get('enabled', False),
+        provider=settings.get('localai', {}).get('provider', 'qwen'),
+        model=settings.get('localai', {}).get('model', 'qwen2.5:3b')
+    )
+
+    return AppConfig(
+        schedule=schedule,
+        ai=ai,
+        report=report,
+        emails=emails,
+        telegram=telegram,
+        openrouter=openrouter,
+        deepseek=deepseek,
+        gemini=gemini,
+        localai=localai
+    )

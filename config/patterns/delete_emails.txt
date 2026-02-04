@@ -1,0 +1,4 @@
+# Exact email addresses to delete (move to Trash)
+# One email per line
+# Example: noreply@spam.com
+no-reply@contabo.com
