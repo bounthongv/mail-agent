@@ -4,3 +4,4 @@ linkedin.com
 byterover.dev
 github.com
 offlinesharks.com
+moonshot.ai

@@ -223,6 +223,7 @@ class MailAgent:
 
         # 1. Check trusted senders (skip filtering, but mark as keep)
         if self._is_trusted(email.from_):
+            print(f"  [TRUSTED] {email.from_[:40]}")
             result['action'] = 'trusted'
             return result
 
