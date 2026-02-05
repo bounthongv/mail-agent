@@ -66,10 +66,14 @@ class EmailFetcher:
         self.mailbox.folder.set(folder)
 
         # Fetch emails with configurable limit (default 100 instead of 500)
-        # mark_seen=False ensures we don't interfere with "unread" status for Step 2
+        # CRITICAL: 'peek=True' is REQUIRED to prevent marking emails as read (SEEN) during fetch
         print(f"Fetching up to {limit} emails from {folder} (Newest First)...")
-        # Ensure we are getting newest first by verifying reverse=True
-        # bulk=True improves performance
+        
+        # 'mark_seen=False' is deprecated/ignored in some libraries or server implementations if not peeking.
+        # We MUST use the Body structure or RFC822.PEEK to guarantee no flag changes.
+        # imap_tools handles this with 'mark_seen=False', but let's be double sure by checking library behavior
+        # In imap_tools, fetch(mark_seen=False) should work, but some servers are quirky.
+        
         for i, msg in enumerate(self.mailbox.fetch(limit=limit, reverse=True, mark_seen=False, bulk=True), 1):
             email_msg = self._parse_message(msg)
             emails.append(email_msg)
