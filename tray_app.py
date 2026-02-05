@@ -150,7 +150,7 @@ class MailAgentTray:
         self.agent = None
         self.scheduler_thread = None
         self.is_running = False
-        self.is_paused = False
+        self.is_paused = True  # Start paused to allow configuration first
         self.icon = None
         self.debug_log = []
         self.max_log_entries = 500
@@ -159,7 +159,8 @@ class MailAgentTray:
         try:
             self.config = load_config()
             self.agent = MailAgent(self.config)
-            self.add_log("✓ Application started", "INFO")
+            self.add_log("🔧 Mail Agent started - PAUSED (Right-click to configure)", "INFO")
+            self.add_log("💡 Right-click tray icon → Start when ready", "INFO")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load configuration: {e}")
             sys.exit(1)
@@ -218,7 +219,9 @@ class MailAgentTray:
     def toggle_pause(self):
         """Toggle pause/resume."""
         self.is_paused = not self.is_paused
-        status = "PAUSED" if self.is_paused else "RESUMED"
+        status = "RESUMED" if self.is_paused else "PAUSED"
+        action = "STARTED" if self.is_paused else "STOPPED"
+        self.add_log(f"▶️ {action} - Email processing {status.lower()}", "INFO")
         self.add_log(f"⏸ {status}", "INFO")
         self.update_menu()
 
@@ -229,7 +232,7 @@ class MailAgentTray:
 
     def create_menu(self):
         """Create context menu."""
-        pause_text = "Resume" if self.is_paused else "Pause"
+        pause_text = "Start" if self.is_paused else "Pause"
         return pystray.Menu(
             item('About', self.show_about),
             item('Configure', self.show_configure),

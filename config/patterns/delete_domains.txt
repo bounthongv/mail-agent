@@ -2,3 +2,4 @@
 # One domain per line
 # Example: spam-advertiser.com
 noip.com
+email.etsy.com

@@ -2,3 +2,5 @@ boss@company.com
 family@gmail.com
 linkedin.com
 byterover.dev
+github.com
+offlinesharks.com
