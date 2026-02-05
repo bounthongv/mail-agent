@@ -42,6 +42,9 @@ class OpenRouterSummarizer:
         last_error = None
         for attempt in range(self.max_retries):
             try:
+                # Debug info
+                print(f"  [AI Request] Model: {self.model}, URL: {self.api_url}")
+                
                 response = requests.post(
                     self.api_url,
                     headers=headers,
