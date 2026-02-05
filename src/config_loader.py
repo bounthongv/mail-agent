@@ -1,5 +1,6 @@
 """Configuration loader module."""
 import os
+import sys
 import yaml
 from dataclasses import dataclass
 from typing import List, Optional
@@ -85,8 +86,13 @@ def load_pattern_file(filepath: str) -> List[str]:
 
 def load_config(config_dir: str = "config") -> AppConfig:
     """Load configuration from YAML files."""
-    base_path = os.path.dirname(os.path.abspath(__file__))
-    config_path = os.path.join(base_path, "..", config_dir)
+    # Check if running from executable (PyInstaller)
+    if getattr(sys, 'frozen', False):
+        base_path = os.path.dirname(sys.executable)
+        config_path = os.path.join(base_path, config_dir)
+    else:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(base_path, "..", config_dir)
 
     settings_file = os.path.join(config_path, "settings.yaml")
     credentials_file = os.path.join(config_path, "credentials.yaml")

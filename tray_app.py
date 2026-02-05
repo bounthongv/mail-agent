@@ -339,7 +339,16 @@ class ConfigWindow:
         notebook = ttk.Notebook(self.window)
         notebook.pack(fill='both', expand=True, padx=10, pady=10)
         
-        # Create tab for each pattern file
+        # Email Accounts Tab
+        self.create_email_tab(notebook)
+        
+        # Telegram Tab
+        self.create_telegram_tab(notebook)
+        
+        # AI Settings Tab
+        self.create_ai_tab(notebook)
+        
+        # Pattern files tabs
         self.text_widgets = {}
         for name, filename in self.pattern_files.items():
             frame = ttk.Frame(notebook)
@@ -376,7 +385,7 @@ class ConfigWindow:
         
         save_btn = tk.Button(
             button_frame,
-            text="Save All",
+            text="Save All Settings",
             command=self.save_all,
             bg='#4CAF50',
             fg='white',
@@ -394,17 +403,325 @@ class ConfigWindow:
         )
         close_btn.pack(side='left', padx=5)
     
-    def save_all(self):
-        """Save all pattern files."""
+    def create_email_tab(self, notebook):
+        """Create email accounts configuration tab."""
+        frame = ttk.Frame(notebook)
+        notebook.add(frame, text="Email Accounts")
+        
+        # Instructions
+        info = tk.Label(
+            frame,
+            text="Add Gmail accounts with App Passwords (enable 2FA first)",
+            font=('Arial', 9),
+            fg='blue'
+        )
+        info.pack(pady=5)
+        
+        # Email list frame
+        list_frame = ttk.Frame(frame)
+        list_frame.pack(fill='both', expand=True, padx=10, pady=5)
+        
+        # Listbox with scrollbar
+        scrollbar = tk.Scrollbar(list_frame)
+        scrollbar.pack(side='right', fill='y')
+        
+        self.email_listbox = tk.Listbox(list_frame, yscrollcommand=scrollbar.set, height=6)
+        self.email_listbox.pack(side='left', fill='both', expand=True)
+        scrollbar.config(command=self.email_listbox.yview)
+        
+        # Buttons
+        btn_frame = tk.Frame(frame)
+        btn_frame.pack(pady=5)
+        
+        tk.Button(btn_frame, text="Add Email", command=self.add_email).pack(side='left', padx=2)
+        tk.Button(btn_frame, text="Remove", command=self.remove_email).pack(side='left', padx=2)
+        
+        # Load existing emails
+        self.load_emails()
+    
+    def create_telegram_tab(self, notebook):
+        """Create Telegram configuration tab."""
+        frame = ttk.Frame(notebook)
+        notebook.add(frame, text="Telegram")
+        
+        # Instructions
+        info = tk.Label(
+            frame,
+            text="Create bot at @BotFather and get Chat ID from @userinfobot",
+            font=('Arial', 9),
+            fg='blue'
+        )
+        info.pack(pady=5)
+        
+        # Bot Token
+        tk.Label(frame, text="Bot Token:").grid(row=0, column=0, sticky='w', padx=10, pady=5)
+        self.token_entry = tk.Entry(frame, width=60, show="*")
+        self.token_entry.grid(row=0, column=1, padx=10, pady=5)
+        
+        # Chat ID
+        tk.Label(frame, text="Chat ID:").grid(row=1, column=0, sticky='w', padx=10, pady=5)
+        self.chat_id_entry = tk.Entry(frame, width=60)
+        self.chat_id_entry.grid(row=1, column=1, padx=10, pady=5)
+        
+        # Test button
+        tk.Button(frame, text="Test Connection", command=self.test_telegram).grid(row=2, column=0, columnspan=2, pady=10)
+        
+        # Load existing settings
+        self.load_telegram()
+    
+    def create_ai_tab(self, notebook):
+        """Create AI configuration tab."""
+        frame = ttk.Frame(notebook)
+        notebook.add(frame, text="AI Settings")
+        
+        # AI Provider
+        tk.Label(frame, text="AI Provider:").grid(row=0, column=0, sticky='w', padx=10, pady=5)
+        self.ai_provider = ttk.Combobox(frame, values=["openrouter", "local", "gemini", "deepseek"], width=20)
+        self.ai_provider.grid(row=0, column=1, sticky='w', padx=10, pady=5)
+        self.ai_provider.bind('<<ComboboxSelected>>', self.on_ai_provider_change)
+        
+        # API Key (for cloud providers)
+        tk.Label(frame, text="API Key:").grid(row=1, column=0, sticky='w', padx=10, pady=5)
+        self.api_key_entry = tk.Entry(frame, width=60, show="*")
+        self.api_key_entry.grid(row=1, column=1, padx=10, pady=5)
+        
+        # Model
+        tk.Label(frame, text="Model:").grid(row=2, column=0, sticky='w', padx=10, pady=5)
+        self.model_entry = tk.Entry(frame, width=60)
+        self.model_entry.grid(row=2, column=1, padx=10, pady=5)
+        
+        # Schedule
+        tk.Label(frame, text="Check Interval (hours):").grid(row=3, column=0, sticky='w', padx=10, pady=5)
+        self.interval_entry = tk.Entry(frame, width=10)
+        self.interval_entry.insert(0, "6")
+        self.interval_entry.grid(row=3, column=1, sticky='w', padx=10, pady=5)
+        
+        # Load existing settings
+        self.load_ai_settings()
+    
+    def on_ai_provider_change(self, event=None):
+        """Handle AI provider change."""
+        provider = self.ai_provider.get()
+        if provider == "local":
+            self.api_key_entry.config(state='disabled')
+            self.model_entry.delete(0, 'end')
+            self.model_entry.insert(0, "qwen2.5:3b")
+        else:
+            self.api_key_entry.config(state='normal')
+            models = {
+                "openrouter": "meta-llama/llama-3.2-3b-instruct:free",
+                "gemini": "gemini-1.5-flash",
+                "deepseek": "deepseek-chat"
+            }
+            self.model_entry.delete(0, 'end')
+            self.model_entry.insert(0, models.get(provider, ""))
+    
+    def load_emails(self):
+        """Load email accounts from config."""
         try:
+            # Get config files path
+            if getattr(sys, 'frozen', False):
+                config_path = os.path.join(os.path.dirname(sys.executable), 'config')
+            else:
+                config_path = os.path.join(os.path.dirname(__file__), 'config')
+            
+            credentials_file = os.path.join(config_path, 'credentials.yaml')
+            if os.path.exists(credentials_file):
+                with open(credentials_file, 'r', encoding='utf-8') as f:
+                    data = yaml.safe_load(f)
+                    self.email_listbox.delete(0, 'end')
+                    for email in data.get('emails', []):
+                        self.email_listbox.insert('end', f"{email['email']} ({'Enabled' if email.get('enabled') else 'Disabled'})")
+        except Exception as e:
+            print(f"Error loading emails: {e}")
+    
+    def load_telegram(self):
+        """Load Telegram settings."""
+        try:
+            if getattr(sys, 'frozen', False):
+                config_path = os.path.join(os.path.dirname(sys.executable), 'config')
+            else:
+                config_path = os.path.join(os.path.dirname(__file__), 'config')
+            
+            credentials_file = os.path.join(config_path, 'credentials.yaml')
+            if os.path.exists(credentials_file):
+                with open(credentials_file, 'r', encoding='utf-8') as f:
+                    data = yaml.safe_load(f)
+                    telegram = data.get('telegram', {})
+                    self.token_entry.insert(0, telegram.get('bot_token', ''))
+                    self.chat_id_entry.insert(0, str(telegram.get('chat_id', '')))
+        except Exception as e:
+            print(f"Error loading telegram: {e}")
+    
+    def load_ai_settings(self):
+        """Load AI settings."""
+        try:
+            if getattr(sys, 'frozen', False):
+                config_path = os.path.join(os.path.dirname(sys.executable), 'config')
+            else:
+                config_path = os.path.join(os.path.dirname(__file__), 'config')
+            
+            settings_file = os.path.join(config_path, 'settings.yaml')
+            if os.path.exists(settings_file):
+                with open(settings_file, 'r', encoding='utf-8') as f:
+                    data = yaml.safe_load(f)
+                    ai = data.get('ai', {})
+                    self.ai_provider.set(ai.get('provider', 'openrouter'))
+                    self.model_entry.insert(0, ai.get('model', ''))
+                    
+                    # Load API key based on provider
+                    credentials_file = os.path.join(config_path, 'credentials.yaml')
+                    if os.path.exists(credentials_file):
+                        with open(credentials_file, 'r', encoding='utf-8') as f:
+                            creds = yaml.safe_load(f)
+                            if self.ai_provider.get() == 'openrouter':
+                                self.api_key_entry.insert(0, creds.get('openrouter', {}).get('api_key', ''))
+                            elif self.ai_provider.get() == 'gemini':
+                                self.api_key_entry.insert(0, creds.get('gemini', {}).get('api_key', ''))
+                            elif self.ai_provider.get() == 'deepseek':
+                                self.api_key_entry.insert(0, creds.get('deepseek', {}).get('api_key', ''))
+                    
+                    schedule = data.get('schedule', {})
+                    self.interval_entry.insert(0, str(schedule.get('interval_hours', 6)))
+        except Exception as e:
+            print(f"Error loading AI settings: {e}")
+    
+    def add_email(self):
+        """Add email account dialog."""
+        dialog = tk.Toplevel(self.window)
+        dialog.title("Add Email Account")
+        dialog.geometry("400x200")
+        
+        tk.Label(dialog, text="Email:").grid(row=0, column=0, sticky='w', padx=10, pady=5)
+        email_entry = tk.Entry(dialog, width=40)
+        email_entry.grid(row=0, column=1, padx=10, pady=5)
+        
+        tk.Label(dialog, text="Password:").grid(row=1, column=0, sticky='w', padx=10, pady=5)
+        pass_entry = tk.Entry(dialog, width=40, show="*")
+        pass_entry.grid(row=1, column=1, padx=10, pady=5)
+        
+        tk.Label(dialog, text="Gmail App Password\n(Enable 2FA first)").grid(row=2, column=0, columnspan=2, padx=10, pady=5)
+        
+        def save():
+            if email_entry.get() and pass_entry.get():
+                emails = []
+                for i in range(self.email_listbox.size()):
+                    entry = self.email_listbox.get(i)
+                    emails.append({'email': entry.split(' ')[0], 'password': '', 'imap_host': 'imap.gmail.com', 'imap_port': 993, 'enabled': True})
+                
+                emails.append({
+                    'email': email_entry.get(),
+                    'password': pass_entry.get(),
+                    'imap_host': 'imap.gmail.com',
+                    'imap_port': 993,
+                    'enabled': True
+                })
+                
+                # Update listbox
+                self.email_listbox.insert('end', f"{email_entry.get()} (Enabled)")
+                dialog.destroy()
+        
+        tk.Button(dialog, text="Save", command=save).grid(row=3, column=0, columnspan=2, pady=10)
+    
+    def remove_email(self):
+        """Remove selected email."""
+        selection = self.email_listbox.curselection()
+        if selection:
+            self.email_listbox.delete(selection[0])
+    
+    def test_telegram(self):
+        """Test Telegram connection."""
+        token = self.token_entry.get()
+        chat_id = self.chat_id_entry.get()
+        
+        if not token or not chat_id:
+            tk.messagebox.showerror("Error", "Please enter bot token and chat ID")
+            return
+        
+        try:
+            bot = Bot(token=token)
+            bot.send_message(chat_id=int(chat_id), text="✅ Mail Agent test message - Configuration working!")
+            tk.messagebox.showinfo("Success", "Test message sent to Telegram!")
+        except Exception as e:
+            tk.messagebox.showerror("Error", f"Failed to send test message:\n{e}")
+    
+    def save_all(self):
+        """Save all settings including patterns, emails, telegram, and AI."""
+        try:
+            # Get config path
+            if getattr(sys, 'frozen', False):
+                config_path = os.path.join(os.path.dirname(sys.executable), 'config')
+            else:
+                config_path = os.path.join(os.path.dirname(__file__), 'config')
+            
+            os.makedirs(config_path, exist_ok=True)
+            
+            # Save pattern files
             for filename, text_widget in self.text_widgets.items():
-                filepath = os.path.join(self.patterns_dir, filename)
+                filepath = os.path.join(config_path, 'patterns', filename)
                 content = text_widget.get('1.0', 'end-1c')
                 
                 with open(filepath, 'w', encoding='utf-8') as f:
                     f.write(content)
             
-            messagebox.showinfo("Success", "All configurations saved successfully!")
+            # Save emails, telegram, and AI settings
+            credentials_file = os.path.join(config_path, 'credentials.yaml')
+            settings_file = os.path.join(config_path, 'settings.yaml')
+            
+            # Build credentials data
+            emails = []
+            for i in range(self.email_listbox.size()):
+                entry = self.email_listbox.get(i)
+                email = entry.split(' ')[0]
+                emails.append({
+                    'email': email,
+                    'password': 'REPLACE_WITH_ACTUAL_PASSWORD',  # Users must edit manually
+                    'imap_host': 'imap.gmail.com',
+                    'imap_port': 993,
+                    'enabled': True
+                })
+            
+            credentials = {
+                'emails': emails,
+                'telegram': {
+                    'bot_token': self.token_entry.get(),
+                    'chat_id': int(self.chat_id_entry.get()) if self.chat_id_entry.get() else 0
+                },
+                'openrouter': {'api_key': self.api_key_entry.get()},
+                'gemini': {'api_key': self.api_key_entry.get()},
+                'deepseek': {'api_key': self.api_key_entry.get()}
+            }
+            
+            settings = {
+                'schedule': {
+                    'enabled': True,
+                    'interval_hours': int(self.interval_entry.get()) if self.interval_entry.get() else 6
+                },
+                'ai': {
+                    'provider': self.ai_provider.get(),
+                    'model': self.model_entry.get(),
+                    'max_tokens': 300,
+                    'temperature': 0.3
+                },
+                'localai': {
+                    'enabled': True,
+                    'provider': 'qwen',
+                    'model': 'qwen2.5:3b'
+                },
+                'report': {
+                    'daily_summary': True,
+                    'max_emails_per_report': 20
+                }
+            }
+            
+            # Save files
+            with open(credentials_file, 'w', encoding='utf-8') as f:
+                yaml.dump(credentials, f, default_flow_style=False)
+            
+            with open(settings_file, 'w', encoding='utf-8') as f:
+                yaml.dump(settings, f, default_flow_style=False)
+            
+            messagebox.showinfo("Success", "All settings saved!\n\n⚠️ Important: Email passwords need to be set manually in credentials.yaml for security.")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save: {e}")
 

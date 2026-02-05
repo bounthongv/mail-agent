@@ -32,7 +32,12 @@ from scheduler import Scheduler
 class MailAgent:
     def __init__(self, config: AppConfig):
         self.config = config
-        self.base_path = os.path.join(os.path.dirname(__file__), '..', 'config', 'patterns')
+        # Check if running from executable (PyInstaller)
+        if getattr(sys, 'frozen', False):
+            base_dir = os.path.dirname(sys.executable)
+        else:
+            base_dir = os.path.join(os.path.dirname(__file__), '..')
+        self.base_path = os.path.join(base_dir, 'config', 'patterns')
 
         self.spam_email_filter = SpamEmailFilter(
             os.path.join(self.base_path, 'spam_emails.txt')

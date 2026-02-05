@@ -1,0 +1,3 @@
+# Exact email addresses to mark as spam
+# One email per line
+# Example: marketing@unknown.com
