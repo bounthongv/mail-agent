@@ -193,6 +193,9 @@ class MailAgent:
                                 'subject': email.subject,
                                 'summary': summary
                             })
+                            # Mark as read after successful processing
+                            fetcher.mark_as_read(email.uid)
+
                     elif result['action'] == 'keep':
                         # Not matched any filter - summarize
                         print(f"  [SUMMARIZING] {email.subject[:40]}")
@@ -206,6 +209,8 @@ class MailAgent:
                                 'subject': email.subject,
                                 'summary': summary
                             })
+                            # Mark as read after successful processing
+                            fetcher.mark_as_read(email.uid)
 
                 fetcher.disconnect()
 

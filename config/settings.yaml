@@ -6,7 +6,7 @@ schedule:
 # AI Settings
 ai:
   provider: "openrouter"
-  model: "google/gemini-2.0-flash-lite-preview-02-05:free"
+  model: "google/gemini-2.0-flash-exp:free"
   max_tokens: 300
   temperature: 0.3
 

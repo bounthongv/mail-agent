@@ -67,8 +67,10 @@ class EmailFetcher:
 
         # Fetch emails with configurable limit (default 100 instead of 500)
         # mark_seen=False ensures we don't interfere with "unread" status for Step 2
-        print(f"Fetching up to {limit} emails from {folder}...")
-        for i, msg in enumerate(self.mailbox.fetch(limit=limit, reverse=True, mark_seen=False), 1):
+        print(f"Fetching up to {limit} emails from {folder} (Newest First)...")
+        # Ensure we are getting newest first by verifying reverse=True
+        # bulk=True improves performance
+        for i, msg in enumerate(self.mailbox.fetch(limit=limit, reverse=True, mark_seen=False, bulk=True), 1):
             email_msg = self._parse_message(msg)
             emails.append(email_msg)
             
