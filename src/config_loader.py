@@ -109,8 +109,8 @@ def load_config(config_dir: str = "config") -> AppConfig:
     )
 
     ai = AIConfig(
-        provider=settings['ai']['provider'],
-        model=settings['ai']['model'],
+        provider=settings['ai']['provider'].strip(),
+        model=settings['ai']['model'].strip(),
         max_tokens=settings['ai']['max_tokens'],
         temperature=settings['ai']['temperature']
     )
@@ -137,15 +137,15 @@ def load_config(config_dir: str = "config") -> AppConfig:
     )
 
     openrouter = OpenRouterConfig(
-        api_key=credentials['openrouter']['api_key']
+        api_key=credentials['openrouter']['api_key'].strip()
     )
 
     deepseek = DeepSeekConfig(
-        api_key=credentials.get('deepseek', {}).get('api_key', '')
+        api_key=credentials.get('deepseek', {}).get('api_key', '').strip()
     )
 
     gemini = GeminiConfig(
-        api_key=credentials.get('gemini', {}).get('api_key', '')
+        api_key=credentials.get('gemini', {}).get('api_key', '').strip()
     )
 
     localai = LocalAIConfig(

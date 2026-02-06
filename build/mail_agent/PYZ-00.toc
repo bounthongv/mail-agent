@@ -2068,6 +2068,7 @@
    '10\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\socketserver.py',
    'PYMODULE'),
   ('src', 'D:\\mail-agent\\src\\__init__.py', 'PYMODULE'),
+  ('src.config_loader', 'D:\\mail-agent\\src\\config_loader.py', 'PYMODULE'),
   ('src.main', 'D:\\mail-agent\\src\\main.py', 'PYMODULE'),
   ('src.scheduler', 'D:\\mail-agent\\src\\scheduler.py', 'PYMODULE'),
   ('ssl',

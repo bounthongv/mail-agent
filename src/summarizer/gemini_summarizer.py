@@ -4,9 +4,12 @@ from typing import Dict, Optional
 
 
 class GeminiSummarizer:
-    def __init__(self, api_key: str, model: str = "gemini-1.5-flash",
+    def __init__(self, api_key: str, model: str = "gemini-2.0-flash",
                  max_tokens: int = 300, temperature: float = 0.3):
         self.api_key = api_key
+        # Ensure model name doesn't have "models/" prefix twice
+        if model.startswith("models/"):
+            model = model.replace("models/", "")
         self.model = model
         self.max_tokens = max_tokens
         self.temperature = temperature
@@ -38,6 +41,10 @@ class GeminiSummarizer:
                 json=payload,
                 timeout=30
             )
+            
+            if response.status_code != 200:
+                print(f"  [Gemini Error] Status: {response.status_code}, Response: {response.text[:200]}")
+            
             response.raise_for_status()
 
             result = response.json()

@@ -5,3 +5,7 @@ byterover.dev
 github.com
 offlinesharks.com
 moonshot.ai
+qoder.com
+itr.mail.codecademy.com
+students.udemy.com
+learn@deepl.com

@@ -5,12 +5,12 @@ schedule:
 
 # AI Settings
 ai:
-  provider: "openrouter"
-  model: "google/gemma-2-9b-it:free"
+  provider: "local"
+  model: "qwen2.5:3b"
   max_tokens: 300
   temperature: 0.3
 
-# Local AI Settings (fallback - Qwen CLI)
+# Local AI Settings
 localai:
   enabled: true
   provider: "qwen"

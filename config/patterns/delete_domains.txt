@@ -3,3 +3,15 @@
 # Example: spam-advertiser.com
 noip.com
 email.etsy.com
+digitalocean.com
+mail.beehiiv.com
+augmentcode.com
+wallet-tx.blockchain.com
+postman.com
+beermoneyforum.com
+dailymotivation.site
+facebookmail.com
+eq.intuit.com
+updates.coursiv.co
+s.fbs.com
+messaging.squareup.com

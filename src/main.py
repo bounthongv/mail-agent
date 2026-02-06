@@ -8,7 +8,7 @@ Workflow:
 import os
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -64,8 +64,10 @@ class MailAgent:
             model=config.localai.model
         )
 
-        # Priority: OpenRouter (GLM-4.5-Air) -> Local AI (Qwen CLI) -> Gemini -> DeepSeek
-        if config.ai.provider == "openrouter":
+        # Priority: Configured provider -> Fallback chain
+        provider = config.ai.provider.lower()
+        
+        if provider == "openrouter":
             print(f"Using OpenRouter API ({config.ai.model})")
             self.summarizer = OpenRouterSummarizer(
                 api_key=config.openrouter.api_key,
@@ -73,48 +75,58 @@ class MailAgent:
                 max_tokens=config.ai.max_tokens,
                 temperature=config.ai.temperature
             )
-        elif config.ai.provider == "local" and config.localai.enabled:
+        elif provider == "gemini":
+            print(f"Using Google Gemini API ({config.ai.model})")
+            self.summarizer = GeminiSummarizer(
+                api_key=config.gemini.api_key,
+                model=config.ai.model if config.ai.model else "gemini-1.5-flash",
+                max_tokens=config.ai.max_tokens,
+                temperature=config.ai.temperature
+            )
+        elif provider == "deepseek":
+            print(f"Using DeepSeek API ({config.ai.model})")
+            self.summarizer = DeepSeekSummarizer(
+                api_key=config.deepseek.api_key,
+                model=config.ai.model if config.ai.model else "deepseek-chat",
+                max_tokens=config.ai.max_tokens,
+                temperature=config.ai.temperature
+            )
+        elif provider == "local" and config.localai.enabled:
             print(f"Using Local AI ({config.localai.provider})")
             self.summarizer = LocalSummarizer(
                 provider=config.localai.provider,
                 model=config.localai.model
             )
-        elif config.gemini.api_key and config.gemini.api_key != "YOUR_GEMINI_API_KEY_HERE":
-            print("Using Google Gemini API")
-            self.summarizer = GeminiSummarizer(
-                api_key=config.gemini.api_key,
-                model="gemini-1.5-flash",
-                max_tokens=config.ai.max_tokens,
-                temperature=config.ai.temperature
-            )
-        elif config.deepseek.api_key and config.deepseek.api_key != "YOUR_DEEPSEEK_API_KEY_HERE":
-            print("Using DeepSeek API (direct)")
-            self.summarizer = DeepSeekSummarizer(
-                api_key=config.deepseek.api_key,
-                model="deepseek-chat",
-                max_tokens=config.ai.max_tokens,
-                temperature=config.ai.temperature
-            )
         else:
-            print("Using OpenRouter API (fallback)")
-            self.summarizer = OpenRouterSummarizer(
-                api_key=config.openrouter.api_key,
-                model=config.ai.model,
-                max_tokens=config.ai.max_tokens,
-                temperature=config.ai.temperature
-            )
+            # Fallback chain if provider is not explicitly set or recognized
+            if config.openrouter.api_key and config.openrouter.api_key != "YOUR_OPENROUTER_API_KEY_HERE":
+                print(f"Using OpenRouter API (fallback: {config.ai.model})")
+                self.summarizer = OpenRouterSummarizer(
+                    api_key=config.openrouter.api_key,
+                    model=config.ai.model,
+                    max_tokens=config.ai.max_tokens,
+                    temperature=config.ai.temperature
+                )
+            elif config.gemini.api_key and config.gemini.api_key != "YOUR_GEMINI_API_KEY_HERE":
+                print("Using Google Gemini API (fallback)")
+                self.summarizer = GeminiSummarizer(
+                    api_key=config.gemini.api_key,
+                    model="gemini-1.5-flash",
+                    max_tokens=config.ai.max_tokens,
+                    temperature=config.ai.temperature
+                )
+            else:
+                print("Using Local AI (final fallback)")
+                self.summarizer = self.local_summarizer
         self.telegram_sender = TelegramSender(
             bot_token=config.telegram.bot_token,
             chat_id=config.telegram.chat_id
         )
 
     def run_once(self) -> Dict:
-        """Run email processing once."""
+        """Run email processing in a single efficient pass."""
         report = {
             'all_processed': 0,
-            'all_spam_count': 0,
-            'all_deleted_count': 0,
-            'processed': 0,
             'spam_count': 0,
             'deleted_count': 0,
             'summarized_count': 0,
@@ -138,79 +150,93 @@ class MailAgent:
                 password=email_config.password,
                 imap_host=email_config.imap_host,
                 imap_port=email_config.imap_port,
-                timeout=120  # 2 minutes timeout to prevent hanging
+                timeout=120
             )
 
             try:
-                # STEP 1: Process ALL emails (read + unread) with spam/delete filters
-                print("\n--- Step 1: Scanning ALL emails for spam/delete ---")
-                # Reduce limit to 100 to prevent hanging on large inboxes
-                all_emails = fetcher.fetch_all(limit=100)
-                print(f"Found {len(all_emails)} total emails")
+                processed_uids = set()
 
-                for email in all_emails:
+                # PASS 1: Fetch newest 50 emails (Maintenance: Spam/Delete check)
+                print("\n--- Pass 1: Maintenance Scan (Newest 50) ---")
+                recent_emails = fetcher.fetch_all(limit=50)
+                
+                for email in recent_emails:
+                    processed_uids.add(email.uid)
                     report['all_processed'] += 1
+                    
                     result = self._apply_filters(fetcher, email)
-
                     if result['action'] == 'spam':
-                        report['all_spam_count'] += 1
-                    elif result['action'] == 'deleted':
-                        report['all_deleted_count'] += 1
-
-                # STEP 2: Summarize only UNREAD emails
-                print("\n--- Step 2: Summarizing UNREAD emails ---")
-                unread_emails = fetcher.fetch_unread()
-                print(f"Found {len(unread_emails)} unread emails")
-
-                for i, email in enumerate(unread_emails):
-                    print(f"\n[{i+1}/{len(unread_emails)}] Processing: {email.subject[:40]} from {email.from_[:30]}")
-                    report['processed'] += 1
-                    result = self._apply_filters(fetcher, email)
-                    print(f"    Action: {result['action']}")
-
-                    if result['action'] == 'spam':
+                        print(f"  [{email.date}] [SPAM] {email.subject[:40]}")
                         report['spam_count'] += 1
-                        report['spam_details'].append({
-                            'from': email.from_,
-                            'subject': email.subject,
-                            'reason': result['reason']
-                        })
+                        report['spam_details'].append({'from': email.from_, 'subject': email.subject, 'reason': result['reason']})
                     elif result['action'] == 'deleted':
+                        print(f"  [{email.date}] [DELETED] {email.subject[:40]}")
                         report['deleted_count'] += 1
-                        report['deleted_details'].append({
+                        report['deleted_details'].append({'from': email.from_, 'subject': email.subject, 'reason': result['reason']})
+                    elif result['action'] == 'trusted':
+                        print(f"  [{email.date}] [TRUSTED] {email.from_[:40]}")
+                
+                # PASS 2: Fetch UNREAD emails (Summarization)
+                print("\n--- Pass 2: Unread Scan (Up to 200) ---")
+                # Using fetch_unread ensures we find unread emails even if they are old (deep in inbox)
+                unread_emails = fetcher.fetch_unread(limit=200)
+                
+                # Define cutoff for "old" emails (e.g., 7 days)
+                cutoff_days = 7
+                now_utc = datetime.now(timezone.utc)
+                
+                for i, email in enumerate(unread_emails):
+                    # Check age of email
+                    is_old = False
+                    if email.date_obj:
+                        # Ensure date_obj has timezone info to compare with now_utc
+                        # imap_tools usually returns offset-aware datetime
+                        try:
+                            email_age = now_utc - email.date_obj if email.date_obj.tzinfo else datetime.now() - email.date_obj
+                            if email_age.days > cutoff_days:
+                                is_old = True
+                        except Exception:
+                            # If comparison fails, assume it's new to be safe, or just ignore
+                            pass
+
+                    # Skip if already processed in Pass 1 (unless we want to double check, but filters already ran)
+                    if email.uid in processed_uids:
+                         pass
+
+                    # Apply filters again just in case (fast)
+                    result = self._apply_filters(fetcher, email)
+                    if result['action'] in ['spam', 'deleted']:
+                        # Already handled or needs handling
+                        if email.uid not in processed_uids:
+                             if result['action'] == 'spam':
+                                 print(f"  [{email.date}] [SPAM] {email.subject[:40]}")
+                                 report['spam_count'] += 1
+                                 report['spam_details'].append({'from': email.from_, 'subject': email.subject, 'reason': result['reason']})
+                             else:
+                                 print(f"  [{email.date}] [DELETED] {email.subject[:40]}")
+                                 report['deleted_count'] += 1
+                                 report['deleted_details'].append({'from': email.from_, 'subject': email.subject, 'reason': result['reason']})
+                        continue
+                    
+                    # Handle Old Emails (Skip summary, just mark read)
+                    if is_old:
+                        print(f"  [{email.date}] [OLD > {cutoff_days}d] Skipping summary, marking read: {email.subject[:40]}")
+                        fetcher.mark_as_read(email.uid)
+                        continue
+
+                    # Summarize New Unread Emails
+                    print(f"\n[{i+1}/{len(unread_emails)}] [{email.date}] Unread: {email.subject[:40]} {email.labels}")
+                    summary = self._summarize_email(email)
+                    if summary:
+                        print(f"  [SUMMARY] {summary[:60]}...")
+                        report['summarized_count'] += 1
+                        report['summarized'].append({
+                            'account': email_config.email,
                             'from': email.from_,
                             'subject': email.subject,
-                            'reason': result['reason']
+                            'summary': summary
                         })
-                    elif result['action'] == 'trusted':
-                        # Trusted senders - summarize but don't apply filters
-                        report['summarized_count'] += 1
-                        summary = self._summarize_email(email)
-                        if summary:
-                            report['summarized'].append({
-                                'account': email_config.email,  # Add email account
-                                'from': email.from_,
-                                'subject': email.subject,
-                                'summary': summary
-                            })
-                            # Mark as read after successful processing
-                            fetcher.mark_as_read(email.uid)
-
-                    elif result['action'] == 'keep':
-                        # Not matched any filter - summarize
-                        print(f"  [SUMMARIZING] {email.subject[:40]}")
-                        report['summarized_count'] += 1
-                        summary = self._summarize_email(email)
-                        print(f"  [SUMMARY] {summary[:50] if summary else 'EMPTY'}...")
-                        if summary:
-                            report['summarized'].append({
-                                'account': email_config.email,  # Add email account
-                                'from': email.from_,
-                                'subject': email.subject,
-                                'summary': summary
-                            })
-                            # Mark as read after successful processing
-                            fetcher.mark_as_read(email.uid)
+                        fetcher.mark_as_read(email.uid)
 
                 fetcher.disconnect()
 
@@ -333,7 +359,7 @@ class MailAgent:
 def main():
     """Main entry point."""
     print("="*50)
-    print("Mail Agent - Email Automation System")
+    print("Mail Agent - Email Automation System (v2.1 Source)")
     print("="*50)
 
     try:
@@ -348,16 +374,11 @@ def main():
             print("\n" + "="*50)
             print("Summary Report")
             print("="*50)
-            print(f"All emails scanned: {report['all_processed']}")
-            print(f"  - Moved to Spam: {report['all_spam_count']}")
-            print(f"  - Moved to Trash: {report['all_deleted_count']}")
-            print(f"Unread emails: {report['processed']}")
-            print(f"  - Marked as spam: {report['spam_count']}")
-            print(f"  - Deleted: {report['deleted_count']}")
-            print(f"  - Summarized: {report['summarized_count']}")
+            print(f"Total Newest Emails Scanned: {report['all_processed']}")
+            print(f"  - Moved to Spam: {report['spam_count']}")
+            print(f"  - Moved to Trash: {report['deleted_count']}")
+            print(f"  - Summarized & Read: {report['summarized_count']}")
             print(f"  - Telegram messages: {len(report['summarized'])}")
-            print(f"  - Spam details: {len(report['spam_details'])}")
-            print(f"  - Deleted details: {len(report['deleted_details'])}")
 
             if config.report.daily_summary:
                 print(f"\nSending report to Telegram...")

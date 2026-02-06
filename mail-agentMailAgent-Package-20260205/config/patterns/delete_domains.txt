@@ -1,4 +1,0 @@
-# Domains to delete (move to Trash)
-# One domain per line
-# Example: spam-advertiser.com
-noip.com

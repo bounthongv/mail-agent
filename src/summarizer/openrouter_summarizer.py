@@ -59,6 +59,9 @@ class OpenRouterSummarizer:
                     time.sleep(delay)
                     continue
 
+                if response.status_code != 200:
+                    print(f"  [AI Error] Status: {response.status_code}, Response: {response.text[:200]}")
+                
                 response.raise_for_status()
 
                 result = response.json()

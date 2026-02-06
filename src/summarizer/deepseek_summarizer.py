@@ -40,6 +40,10 @@ class DeepSeekSummarizer:
                 json=payload,
                 timeout=30
             )
+            
+            if response.status_code != 200:
+                print(f"  [DeepSeek Error] Status: {response.status_code}, Response: {response.text[:200]}")
+                
             response.raise_for_status()
 
             result = response.json()
