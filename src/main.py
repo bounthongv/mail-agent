@@ -58,6 +58,9 @@ class MailAgent:
             os.path.join(self.base_path, 'delete_keywords.txt')
         )
 
+        # Cache trusted senders
+        self.trusted_senders = self._load_trusted_senders()
+
         # Always initialize local summarizer as backup
         self.local_summarizer = LocalSummarizer(
             provider=config.localai.provider,
@@ -344,16 +347,25 @@ class MailAgent:
             return f"[Could not summarize: {str(e)[:30]}...]"
 
     def _is_trusted(self, sender: str) -> bool:
-        """Check if sender is trusted."""
+        """Check if sender is trusted using cached list."""
+        if not self.trusted_senders:
+            return False
+            
+        sender_lower = sender.lower()
+        return any(t in sender_lower for t in self.trusted_senders)
+
+    def _load_trusted_senders(self) -> List[str]:
+        """Load trusted senders from file once."""
         trusted_file = os.path.join(self.base_path, 'trusted_senders.txt')
         if not os.path.exists(trusted_file):
-            return False
+            return []
 
-        with open(trusted_file, 'r', encoding='utf-8') as f:
-            trusted = [line.strip().lower() for line in f if line.strip()]
-
-        sender_lower = sender.lower()
-        return any(t in sender_lower for t in trusted)
+        try:
+            with open(trusted_file, 'r', encoding='utf-8') as f:
+                return [line.strip().lower() for line in f if line.strip()]
+        except Exception as e:
+            print(f"Error loading trusted senders: {e}")
+            return []
 
 
 def main():

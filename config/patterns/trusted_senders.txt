@@ -9,3 +9,8 @@ qoder.com
 itr.mail.codecademy.com
 students.udemy.com
 learn@deepl.com
+hello.codedamn.com
+m.learn.coursera.org
+codewithmosh.com
+supabase.com
+flutterflow.io

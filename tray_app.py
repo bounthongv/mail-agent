@@ -35,31 +35,58 @@ class LogRedirector:
         self.buffer = ""
 
     def write(self, message):
-        # Buffer the message to handle multi-line output properly
-        # Replace carriage returns with newlines for consistent processing
-        message = message.replace('\r\n', '\n').replace('\r', '\n')
-        self.buffer += message
+        try:
+            # Prevent recursion - if we're already processing a write, just buffer
+            if hasattr(self, '_writing') and self._writing:
+                # Just add to buffer without processing
+                message = message.replace('\r\n', '\n').replace('\r', '\n')
+                self.buffer += message
+                return len(message)
+            
+            self._writing = True
+            try:
+                # Buffer the message to handle multi-line output properly
+                # Replace carriage returns with newlines for consistent processing
+                message = message.replace('\r\n', '\n').replace('\r', '\n')
+                self.buffer += message
 
-        # Process complete lines
-        while '\n' in self.buffer:
-            line, self.buffer = self.buffer.split('\n', 1)
-            line = line.strip()
-            if line:
-                # Only add to log, don't print again to avoid duplication
-                self.log_func(line, "INFO")
+                # Process complete lines
+                while '\n' in self.buffer:
+                    line, self.buffer = self.buffer.split('\n', 1)
+                    line = line.strip()
+                    if line:
+                        # Only add to log, don't print again to avoid duplication
+                        self.log_func(line, "INFO")
 
-        return len(message)
+                return len(message)
+            finally:
+                self._writing = False
+        except Exception:
+            # Silently ignore any errors during logging to prevent hangs
+            return len(message) if 'message' in locals() else 0
 
     def flush(self):
-        # Flush any remaining buffer content
-        if self.buffer.strip():
-            self.log_func(self.buffer.strip(), "INFO")
-            self.buffer = ""
+        try:
+            # Flush any remaining buffer content
+            # Use a flag to prevent recursion during flush
+            if hasattr(self, '_flushing') and self._flushing:
+                return
+            self._flushing = True
+            try:
+                if self.buffer.strip():
+                    buffer_content = self.buffer.strip()
+                    self.buffer = ""  # Clear buffer first to prevent recursion
+                    self.log_func(buffer_content, "INFO")
+            finally:
+                self._flushing = False
+        except Exception:
+            # Silently ignore any errors during flush to prevent hangs
+            pass
 
 
 class EditPatternsWindow:
     """Window for editing pattern .txt files only."""
-    
+
     def __init__(self, parent=None):
         if parent:
             self.window = tk.Toplevel(parent)
@@ -69,8 +96,16 @@ class EditPatternsWindow:
         self.window.title("Edit Filter Patterns")
         self.window.geometry("700x500")
         self.window.transient()  # Set as transient to avoid taskbar issues
-        
-        self.patterns_dir = os.path.join(os.path.dirname(__file__), 'config', 'patterns')
+
+        # Determine the correct patterns directory based on whether running from source or executable
+        if getattr(sys, 'frozen', False):
+            # Running as compiled executable
+            base_dir = os.path.dirname(sys.executable)
+        else:
+            # Running from source
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+        self.patterns_dir = os.path.join(base_dir, 'config', 'patterns')
+
         self.pattern_files = {
             'Trusted Senders': 'trusted_senders.txt',
             'Spam Emails': 'spam_emails.txt',
@@ -80,19 +115,7 @@ class EditPatternsWindow:
             'Delete Domains': 'delete_domains.txt',
             'Delete Keywords': 'delete_keywords.txt'
         }
-        
-        self.create_widgets()
-        
-        self.pattern_files = {
-            'Trusted Senders': 'trusted_senders.txt',
-            'Spam Emails': 'spam_emails.txt',
-            'Spam Domains': 'spam_domains.txt',
-            'Spam Keywords': 'spam_keywords.txt',
-            'Delete Emails': 'delete_emails.txt',
-            'Delete Domains': 'delete_domains.txt',
-            'Delete Keywords': 'delete_keywords.txt'
-        }
-        
+
         self.create_widgets()
         
     def create_widgets(self):
@@ -133,6 +156,9 @@ class EditPatternsWindow:
 
     def save_patterns(self):
         try:
+            # Create directory if it doesn't exist
+            os.makedirs(self.patterns_dir, exist_ok=True)
+
             for filename, text_widget in self.text_widgets.items():
                 filepath = os.path.join(self.patterns_dir, filename)
                 content = text_widget.get('1.0', 'end-1c').strip()
@@ -146,9 +172,10 @@ class EditPatternsWindow:
 class DebugLogWindow:
     """Debug log viewer window."""
 
-    def __init__(self, log_entries, parent=None):
+    def __init__(self, log_entries, parent=None, config=None):
         self.log_entries = log_entries
         self.parent = parent
+        self.config = config
         if parent:
             self.window = tk.Toplevel(parent)
         else:
@@ -322,7 +349,7 @@ class MailAgentTray:
         self.is_paused = True  # Start paused to allow configuration first
         self.icon = None
         self.debug_log = []
-        self.max_log_entries = 500
+        self.max_log_entries = 2000
         
         # Capture original stdout/stderr for logging to avoid recursion
         self.original_stdout = sys.stdout
@@ -355,7 +382,11 @@ class MailAgentTray:
             # Restore original stdout/stderr after initialization
             sys.stdout = old_stdout
             sys.stderr = old_stderr
-            redirector.flush()
+            try:
+                redirector.flush()
+            except Exception:
+                # Ignore flush errors to prevent hangs
+                pass
 
             # Add startup messages similar to source version
             self.add_log("="*50, "INFO")
@@ -400,36 +431,44 @@ class MailAgentTray:
 
     def add_log(self, message: str, level: str = "INFO"):
         """Add entry to debug log."""
-        # Handle multi-line messages by splitting them
-        lines = message.split('\n')
-        for line in lines:
-            line = line.strip()
-            if line:  # Only log non-empty lines
-                # Check if the message already contains a timestamp to avoid duplication
-                if not line.startswith('[') or '] [' not in line:
-                    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    log_entry = f"[{timestamp}] [{level}] {line}"
-                else:
-                    # Message already has timestamp/formatting, use as-is
-                    log_entry = line
+        try:
+            # Handle multi-line messages by splitting them
+            lines = message.split('\n')
+            for line in lines:
+                line = line.strip()
+                if line:  # Only log non-empty lines
+                    # Check if the message already contains a timestamp to avoid duplication
+                    if not line.startswith('[') or '] [' not in line:
+                        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        log_entry = f"[{timestamp}] [{level}] {line}"
+                    else:
+                        # Message already has timestamp/formatting, use as-is
+                        log_entry = line
 
-                self.debug_log.append(log_entry)
+                    self.debug_log.append(log_entry)
 
-                # Keep only last N entries
-                if len(self.debug_log) > self.max_log_entries:
-                    self.debug_log = self.debug_log[-self.max_log_entries:]
+                    # Keep only last N entries
+                    if len(self.debug_log) > self.max_log_entries:
+                        self.debug_log = self.debug_log[-self.max_log_entries:]
 
-                # Also print to console - use original_stdout to avoid recursion
-                if self.original_stdout:
-                    try:
-                        self.original_stdout.write(log_entry + '\n')
-                        self.original_stdout.flush()
-                    except Exception:
-                        pass
+                    # Also print to console - use original_stdout to avoid recursion
+                    if self.original_stdout:
+                        try:
+                            self.original_stdout.write(log_entry + '\n')
+                            self.original_stdout.flush()
+                        except Exception:
+                            pass
+        except Exception as e:
+            # Silently ignore logging errors to prevent hangs
+            import sys
+            try:
+                sys.__stderr__.write(f"Error in add_log: {e}\n")
+            except:
+                pass
 
     def show_debug_log(self):
         """Show debug log window."""
-        self.root.after(0, lambda: DebugLogWindow(self.debug_log, self.root))
+        self.root.after(0, lambda: DebugLogWindow(self.debug_log, self.root, self.config))
 
     def show_edit_patterns(self):
         """Show the simplified pattern editor."""
@@ -495,21 +534,68 @@ class MailAgentTray:
 
                 try:
                     print("🔍 Starting email check...")
-                    report = self.agent.run_once()
 
-                    stats = []
-                    stats.append(f"✅ Scanned: {report['all_processed']}")
-                    stats.append(f"🚫 Spam: {report['spam_count']}")
-                    stats.append(f"🗑️ Deleted: {report['deleted_count']}")
-                    stats.append(f"📧 Summarized: {report['summarized_count']}")
+                    # Run the email processing with timeout to prevent hanging
+                    import threading
+                    report_result = [None]
+                    processing_exception = [None]
+                    timed_out = [False]
 
-                    print(f"📊 Results: " + " | ".join(stats))
+                    def run_processing():
+                        try:
+                            report_result[0] = self.agent.run_once()
+                        except Exception as e:
+                            processing_exception[0] = e
 
-                    if self.config.report.daily_summary and report['summarized_count'] > 0:
+                    processing_thread = threading.Thread(target=run_processing)
+                    processing_thread.daemon = True
+                    processing_thread.start()
+                    processing_thread.join(timeout=1800)  # 30 minute timeout for entire processing
+
+                    if processing_thread.is_alive():
+                        print("⚠️ Email processing timed out after 30 minutes")
+                        # Mark as timed out to skip the rest of the processing
+                        timed_out[0] = True
+                    elif processing_exception[0]:
+                        print(f"❌ Error during email processing: {processing_exception[0]}")
+                        raise processing_exception[0]
+                    else:
+                        report = report_result[0]
+
+                        stats = []
+                        stats.append(f"✅ Scanned: {report['all_processed']}")
+                        stats.append(f"🚫 Spam: {report['spam_count']}")
+                        stats.append(f"🗑️ Deleted: {report['deleted_count']}")
+                        stats.append(f"📧 Summarized: {report['summarized_count']}")
+
+                        print(f"📊 Results: " + " | ".join(stats))
+
+                    # Only send Telegram report if processing completed successfully and not timed out
+                    if not timed_out[0] and self.config.report.daily_summary and report['summarized_count'] > 0:
                         print("📤 Sending report to Telegram...")
-                        success = self.agent.telegram_sender.send_summary(report)
-                        status = "✅ Sent" if success else "❌ Failed"
-                        print(f"📤 Telegram report: {status}")
+
+                        result = [None]
+                        exception_occurred = [None]
+
+                        def send_report():
+                            try:
+                                result[0] = self.agent.telegram_sender.send_summary(report)
+                            except Exception as e:
+                                exception_occurred[0] = e
+
+                        thread = threading.Thread(target=send_report)
+                        thread.daemon = True
+                        thread.start()
+                        thread.join(timeout=30)  # 30 second timeout
+
+                        if thread.is_alive():
+                            print("📤 Telegram report: ⏳ Timeout")
+                        elif exception_occurred[0]:
+                            print(f"📤 Telegram report: ❌ Error - {exception_occurred[0]}")
+                        else:
+                            success = result[0]
+                            status = "✅ Sent" if success else "❌ Failed"
+                            print(f"📤 Telegram report: {status}")
 
                 finally:
                     # Always restore streams and flush any remaining buffer
@@ -517,22 +603,28 @@ class MailAgentTray:
                     sys.stdout = old_stdout
                     sys.stderr = old_stderr
 
+                    # Print completion status after restoring stdout/stderr to ensure it's always logged
+                    if 'timed_out' in locals() and timed_out[0]:
+                        self.add_log(f"⚠️ Processing timed out at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", "INFO")
+                    else:
+                        self.add_log(f"✅ Processing completed at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", "INFO")
+                    next_run_time = datetime.datetime.now() + datetime.timedelta(hours=self.config.schedule.interval_hours)
+                    self.add_log(f"⏰ Next run scheduled at: {next_run_time.strftime('%Y-%m-%d %H:%M:%S')} (in {self.config.schedule.interval_hours} hours)", "INFO")
+
             except Exception as e:
                 # Restore original stdout temporarily to ensure exception is logged
                 sys.stdout = old_stdout
                 sys.stderr = old_stderr
-                # Capture exceptions with the original stdout to ensure they're logged
+                # Capture exceptions
                 error_msg = f"❌ Error during email check: {e}"
                 self.add_log(error_msg, "ERROR")
                 import traceback
-                traceback.print_exc()
-                # Re-establish redirection after handling exception
-                sys.stdout = redirector
-                sys.stderr = redirector
+                self.add_log(traceback.format_exc(), "ERROR")
 
             # Wait for next run
             interval = self.config.schedule.interval_hours * 3600
-            self.add_log(f"⏳ Waiting {self.config.schedule.interval_hours}h for next run...", "INFO")
+            next_run_time = datetime.datetime.now() + datetime.timedelta(hours=self.config.schedule.interval_hours)
+            self.add_log(f"⏳ Waiting {self.config.schedule.interval_hours}h for next run (until {next_run_time.strftime('%Y-%m-%d %H:%M:%S')})...", "INFO")
 
             for _ in range(interval):
                 if not self.is_running:
