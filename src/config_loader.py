@@ -37,6 +37,11 @@ class GeminiConfig:
 
 
 @dataclass
+class GrokConfig:
+    api_key: str
+
+
+@dataclass
 class LocalAIConfig:
     enabled: bool
     provider: str  # "qwen" or "ollama"
@@ -73,6 +78,7 @@ class AppConfig:
     openrouter: OpenRouterConfig
     deepseek: DeepSeekConfig
     gemini: GeminiConfig
+    grok: GrokConfig
     localai: LocalAIConfig
 
 
@@ -148,6 +154,10 @@ def load_config(config_dir: str = "config") -> AppConfig:
         api_key=credentials.get('gemini', {}).get('api_key', '').strip()
     )
 
+    grok = GrokConfig(
+        api_key=credentials.get('grok', {}).get('api_key', '').strip()
+    )
+
     localai = LocalAIConfig(
         enabled=settings.get('localai', {}).get('enabled', False),
         provider=settings.get('localai', {}).get('provider', 'qwen'),
@@ -163,5 +173,6 @@ def load_config(config_dir: str = "config") -> AppConfig:
         openrouter=openrouter,
         deepseek=deepseek,
         gemini=gemini,
+        grok=grok,
         localai=localai
     )

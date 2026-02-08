@@ -18,10 +18,12 @@ def test_config():
 
 def test_summary():
     print("\n2. Summary...")
-    print(f"   Email: bounthongv@gmail.com")
-    print(f"   Bot: EmailSummaryBot (@bt_email_bot)")
-    print(f"   Telegram Chat ID: 7252862418")
-    print(f"   AI: z-ai/glm-4.5-air:free (OpenRouter)")
+    config = load_config()
+    print(f"   Email(s): {', '.join([e.email for e in config.emails])}")
+    print(f"   Telegram Chat ID: {config.telegram.chat_id}")
+    print(f"   Primary AI: {config.ai.provider} ({config.ai.model})")
+    if config.localai.enabled:
+        print(f"   Backup AI: {config.localai.provider} ({config.localai.model})")
 
 
 if __name__ == "__main__":

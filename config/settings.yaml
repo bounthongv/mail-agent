@@ -5,16 +5,16 @@ schedule:
 
 # AI Settings
 ai:
-  provider: "local"
-  model: "qwen2.5:3b"
+  provider: "ollama"
+  model: "qwen2.5:1.5b"
   max_tokens: 300
   temperature: 0.3
 
 # Local AI Settings
 localai:
   enabled: true
-  provider: "qwen"
-  model: "qwen2.5:3b"
+  provider: "ollama"
+  model: "qwen2.5:1.5b"
 
 # Report Settings
 report:

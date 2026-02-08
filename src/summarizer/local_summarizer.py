@@ -24,22 +24,34 @@ class LocalSummarizer:
     def _summarize_with_qwen(self, prompt: str) -> str:
         """Use Qwen CLI to summarize via npx."""
         try:
-            # Get npx path
-            npx_path = "C:\\Users\\Windows 10\\AppData\\Roaming\\npm\\npx.cmd"
+            import shutil
+            # Try to find npx in the system PATH
+            npx_path = shutil.which("npx") or shutil.which("npx.cmd")
+            
+            if not npx_path:
+                # Last resort fallback (Windows common locations)
+                common_paths = [
+                    os.path.join(os.environ.get('APPDATA', ''), 'npm', 'npx.cmd'),
+                    "C:\\Program Files\\nodejs\\npx.cmd"
+                ]
+                for p in common_paths:
+                    if os.path.exists(p):
+                        npx_path = p
+                        break
+
+            if not npx_path:
+                return "[Error: npx not found in PATH]"
 
             # Qwen Code CLI - use -p flag for prompt mode
-            # Sanitize prompt to avoid command line issues
-            clean_prompt = prompt.replace('"', "'").replace('\n', ' ')
-            full_prompt = f"Summarize this email in 2-3 sentences: {clean_prompt}"
+            full_prompt = f"Summarize this email in 2-3 sentences: {prompt}"
 
-            # Use shell=True for npx on Windows, but pass command as string to avoid argument parsing issues
-            # Or better: use shell=False with full path to npx.cmd
+            # Use subprocess.run with shell=True for Windows compatibility with npx
             result = subprocess.run(
                 [npx_path, "@qwen-code/qwen-code", "-p", full_prompt],
                 capture_output=True,
                 text=True,
                 timeout=90,
-                shell=True # Kept shell=True but sanitized input
+                shell=True
             )
             if result.returncode == 0 and result.stdout.strip():
                 return result.stdout.strip()

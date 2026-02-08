@@ -20,3 +20,6 @@ tmp/
 # Package files
 MailAgent-Package-*.zip
 *Package-*.zip
+
+# Local package folders
+MailAgent-Package/

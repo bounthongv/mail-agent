@@ -24,6 +24,7 @@ from filters.spam_email_filter import SpamEmailFilter
 from summarizer.openrouter_summarizer import OpenRouterSummarizer
 from summarizer.deepseek_summarizer import DeepSeekSummarizer
 from summarizer.gemini_summarizer import GeminiSummarizer
+from summarizer.grok_summarizer import GrokSummarizer
 from summarizer.local_summarizer import LocalSummarizer
 from reports.telegram_sender import TelegramSender
 from scheduler import Scheduler
@@ -61,11 +62,9 @@ class MailAgent:
         # Cache trusted senders
         self.trusted_senders = self._load_trusted_senders()
 
-        # Always initialize local summarizer as backup
-        self.local_summarizer = LocalSummarizer(
-            provider=config.localai.provider,
-            model=config.localai.model
-        )
+        # Initialize dedicated fallback summarizers
+        self.ollama_summarizer = LocalSummarizer(provider="ollama", model=config.localai.model)
+        self.qwen_summarizer = LocalSummarizer(provider="qwen", model="qwen2.5:3b")
 
         # Priority: Configured provider -> Fallback chain
         provider = config.ai.provider.lower()
@@ -82,10 +81,16 @@ class MailAgent:
             print(f"Using Google Gemini API ({config.ai.model})")
             self.summarizer = GeminiSummarizer(
                 api_key=config.gemini.api_key,
-                model=config.ai.model if config.ai.model else "gemini-1.5-flash",
+                model=config.ai.model if config.ai.model else "gemini-2.0-flash",
                 max_tokens=config.ai.max_tokens,
                 temperature=config.ai.temperature
             )
+        elif provider == "ollama":
+            print(f"Using Local Ollama ({config.localai.model})")
+            self.summarizer = self.ollama_summarizer
+        elif provider == "local" or provider == "qwen":
+            print(f"Using Local Qwen CLI")
+            self.summarizer = self.qwen_summarizer
         elif provider == "deepseek":
             print(f"Using DeepSeek API ({config.ai.model})")
             self.summarizer = DeepSeekSummarizer(
@@ -94,33 +99,19 @@ class MailAgent:
                 max_tokens=config.ai.max_tokens,
                 temperature=config.ai.temperature
             )
-        elif provider == "local" and config.localai.enabled:
-            print(f"Using Local AI ({config.localai.provider})")
-            self.summarizer = LocalSummarizer(
-                provider=config.localai.provider,
-                model=config.localai.model
+        elif provider == "grok":
+            print(f"Using Grok API ({config.ai.model})")
+            self.summarizer = GrokSummarizer(
+                api_key=config.grok.api_key,
+                model=config.ai.model if config.ai.model else "grok-beta",
+                max_tokens=config.ai.max_tokens,
+                temperature=config.ai.temperature
             )
         else:
-            # Fallback chain if provider is not explicitly set or recognized
-            if config.openrouter.api_key and config.openrouter.api_key != "YOUR_OPENROUTER_API_KEY_HERE":
-                print(f"Using OpenRouter API (fallback: {config.ai.model})")
-                self.summarizer = OpenRouterSummarizer(
-                    api_key=config.openrouter.api_key,
-                    model=config.ai.model,
-                    max_tokens=config.ai.max_tokens,
-                    temperature=config.ai.temperature
-                )
-            elif config.gemini.api_key and config.gemini.api_key != "YOUR_GEMINI_API_KEY_HERE":
-                print("Using Google Gemini API (fallback)")
-                self.summarizer = GeminiSummarizer(
-                    api_key=config.gemini.api_key,
-                    model="gemini-1.5-flash",
-                    max_tokens=config.ai.max_tokens,
-                    temperature=config.ai.temperature
-                )
-            else:
-                print("Using Local AI (final fallback)")
-                self.summarizer = self.local_summarizer
+            # Default Fallback if unknown
+            print("Using Local Ollama (default)")
+            self.summarizer = self.ollama_summarizer
+
         self.telegram_sender = TelegramSender(
             bot_token=config.telegram.bot_token,
             chat_id=config.telegram.chat_id
@@ -184,8 +175,8 @@ class MailAgent:
                 # Using fetch_unread ensures we find unread emails even if they are old (deep in inbox)
                 unread_emails = fetcher.fetch_unread(limit=200)
                 
-                # Define cutoff for "old" emails (e.g., 7 days)
-                cutoff_days = 7
+                # Define cutoff for "old" emails (e.g., 30 days)
+                cutoff_days = 30
                 now_utc = datetime.now(timezone.utc)
                 
                 for i, email in enumerate(unread_emails):
@@ -320,7 +311,7 @@ class MailAgent:
         return result
 
     def _summarize_email(self, email: EmailMessage) -> str:
-        """Summarize a single email with rate limiting and fallback."""
+        """Summarize a single email with rate limiting, retry logic, and multi-layer fallback."""
         try:
             email_data = {
                 'from': email.from_,
@@ -330,16 +321,45 @@ class MailAgent:
             # Add delay to avoid rate limiting
             time.sleep(1)
             
-            # Try primary summarizer
+            # 1. Try primary summarizer
             summary = self.summarizer.summarize(email_data)
             
-            # Fallback if primary fails
+            # Smart Retry for Rate Limiting (429)
+            if "429" in summary or "Too Many Requests" in summary:
+                print("  [Rate Limit] Primary AI quota hit. Waiting 30s for reset...")
+                time.sleep(30)
+                summary = self.summarizer.summarize(email_data)
+
+            # 2. Fallback Chain
             if summary.startswith("[Error:") or summary.startswith("[Could not summarize"):
-                print(f"  [Primary AI Failed] {summary}")
-                print("  [FALLBACK] Trying Local AI...")
-                fallback_summary = self.local_summarizer.summarize(email_data)
-                if not fallback_summary.startswith("[Error") and not fallback_summary.startswith("[Qwen error"):
-                    return fallback_summary
+                print(f"  [Primary AI Failed] {summary[:60]}...")
+                
+                # Fallback Layer 1: Gemini (if not already primary)
+                if self.config.ai.provider != "gemini" and self.config.gemini.api_key:
+                    print("  [FALLBACK 1] Trying Direct Gemini...")
+                    gemini = GeminiSummarizer(api_key=self.config.gemini.api_key, model="gemini-2.0-flash")
+                    summary = gemini.summarize(email_data)
+                
+                # Fallback Layer 2: OpenRouter (DeepSeek Free)
+                if (summary.startswith("[Error:") or summary.startswith("[Could not summarize")) and self.config.openrouter.api_key:
+                    print("  [FALLBACK 2] Trying OpenRouter (DeepSeek Free)...")
+                    # Dynamically use a free model via OpenRouter
+                    or_summarizer = OpenRouterSummarizer(
+                        api_key=self.config.openrouter.api_key,
+                        model="deepseek/deepseek-r1:free" 
+                    )
+                    summary = or_summarizer.summarize(email_data)
+
+                # Fallback Layer 3: Local AI (Ollama)
+                if (summary.startswith("[Error:") or summary.startswith("[Could not summarize")):
+                    if self.config.ai.provider != "ollama":
+                        print("  [FALLBACK 3] Trying Local Ollama...")
+                        summary = self.ollama_summarizer.summarize(email_data)
+                
+                # Fallback Layer 4: Local AI (Qwen CLI) - The absolute backup
+                if (summary.startswith("[Error:") or summary.startswith("[Could not summarize")):
+                    print("  [FALLBACK 4] Trying Local Qwen CLI (Last Resort)...")
+                    summary = self.qwen_summarizer.summarize(email_data)
             
             return summary
         except Exception as e:
