@@ -23,3 +23,9 @@ MailAgent-Package-*.zip
 
 # Local package folders
 MailAgent-Package/
+
+# Mobile Version Ignores
+mobile-version/.env
+mobile-version/data/
+mobile-version/__pycache__/
+mobile-version/app/__pycache__/

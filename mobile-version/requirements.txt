@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+streamlit
+sqlalchemy
+pydantic
+pydantic-settings
+pyyaml
+requests
+imap-tools
+python-telegram-bot
+python-dotenv
