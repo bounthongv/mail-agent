@@ -37,7 +37,17 @@ class GeminiConfig:
 
 
 @dataclass
-class GrokConfig:
+class HuggingFaceConfig:
+    api_key: str
+
+
+@dataclass
+class NvidiaConfig:
+    api_key: str
+
+
+@dataclass
+class GroqConfig:
     api_key: str
 
 
@@ -78,7 +88,9 @@ class AppConfig:
     openrouter: OpenRouterConfig
     deepseek: DeepSeekConfig
     gemini: GeminiConfig
-    grok: GrokConfig
+    huggingface: HuggingFaceConfig
+    nvidia: NvidiaConfig
+    groq: GroqConfig
     localai: LocalAIConfig
 
 
@@ -154,8 +166,16 @@ def load_config(config_dir: str = "config") -> AppConfig:
         api_key=credentials.get('gemini', {}).get('api_key', '').strip()
     )
 
-    grok = GrokConfig(
-        api_key=credentials.get('grok', {}).get('api_key', '').strip()
+    huggingface = HuggingFaceConfig(
+        api_key=credentials.get('huggingface', {}).get('api_key', '').strip()
+    )
+
+    nvidia = NvidiaConfig(
+        api_key=credentials.get('nvidia', {}).get('api_key', '').strip()
+    )
+
+    groq = GroqConfig(
+        api_key=credentials.get('groq', {}).get('api_key', '').strip()
     )
 
     localai = LocalAIConfig(
@@ -173,6 +193,8 @@ def load_config(config_dir: str = "config") -> AppConfig:
         openrouter=openrouter,
         deepseek=deepseek,
         gemini=gemini,
-        grok=grok,
+        huggingface=huggingface,
+        nvidia=nvidia,
+        groq=groq,
         localai=localai
     )

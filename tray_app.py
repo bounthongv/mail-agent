@@ -543,7 +543,11 @@ class MailAgentTray:
 
                     def run_processing():
                         try:
-                            report_result[0] = self.agent.run_once()
+                            # Define callback to check if we should stop
+                            def check_stop():
+                                return self.is_paused or not self.is_running
+
+                            report_result[0] = self.agent.run_once(check_stop=check_stop)
                         except Exception as e:
                             processing_exception[0] = e
 

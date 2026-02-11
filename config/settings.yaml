@@ -5,8 +5,8 @@ schedule:
 
 # AI Settings
 ai:
-  provider: "ollama"
-  model: "qwen2.5:1.5b"
+  provider: "gemini"
+  model: "gemini-2.0-flash"
   max_tokens: 300
   temperature: 0.3
 

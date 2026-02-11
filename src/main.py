@@ -24,7 +24,9 @@ from filters.spam_email_filter import SpamEmailFilter
 from summarizer.openrouter_summarizer import OpenRouterSummarizer
 from summarizer.deepseek_summarizer import DeepSeekSummarizer
 from summarizer.gemini_summarizer import GeminiSummarizer
-from summarizer.grok_summarizer import GrokSummarizer
+from summarizer.huggingface_summarizer import HuggingFaceSummarizer
+from summarizer.nvidia_summarizer import NvidiaSummarizer
+from summarizer.groq_summarizer import GroqSummarizer
 from summarizer.local_summarizer import LocalSummarizer
 from reports.telegram_sender import TelegramSender
 from scheduler import Scheduler
@@ -99,26 +101,70 @@ class MailAgent:
                 max_tokens=config.ai.max_tokens,
                 temperature=config.ai.temperature
             )
-        elif provider == "grok":
-            print(f"Using Grok API ({config.ai.model})")
-            self.summarizer = GrokSummarizer(
-                api_key=config.grok.api_key,
-                model=config.ai.model if config.ai.model else "grok-beta",
+        elif provider == "huggingface":
+            print(f"Using Hugging Face API ({config.ai.model})")
+            self.summarizer = HuggingFaceSummarizer(
+                api_key=config.huggingface.api_key,
+                model=config.ai.model if config.ai.model else "zai-org/GLM-4.7-Flash:novita",
                 max_tokens=config.ai.max_tokens,
                 temperature=config.ai.temperature
             )
-        else:
-            # Default Fallback if unknown
-            print("Using Local Ollama (default)")
-            self.summarizer = self.ollama_summarizer
+        elif provider == "nvidia":
+            print(f"Using NVIDIA NIM API ({config.ai.model})")
+            self.summarizer = NvidiaSummarizer(
+                api_key=config.nvidia.api_key,
+                model=config.ai.model if config.ai.model else "moonshotai/kimi-k1.5",
+                max_tokens=config.ai.max_tokens,
+                temperature=config.ai.temperature
+            )
+        elif provider == "groq":
+            print(f"Using Groq API ({config.ai.model})")
+            self.summarizer = GroqSummarizer(
+                api_key=config.groq.api_key,
+                model=config.ai.model if config.ai.model else "llama-3.1-8b-instant",
+                max_tokens=config.ai.max_tokens,
+                temperature=config.ai.temperature
+            )
+            # Fallback chain if provider is not explicitly set or recognized
+            if config.gemini.api_key and config.gemini.api_key not in ["", "YOUR_GEMINI_API_KEY_HERE"]:
+                print("Using Google Gemini API (fallback)")
+                self.summarizer = GeminiSummarizer(
+                    api_key=config.gemini.api_key,
+                    model="gemini-2.0-flash",
+                    max_tokens=config.ai.max_tokens,
+                    temperature=config.ai.temperature
+                )
+            elif config.huggingface.api_key and config.huggingface.api_key not in ["", "YOUR_HF_TOKEN_HERE"]:
+                print("Using Hugging Face API (fallback)")
+                self.summarizer = HuggingFaceSummarizer(
+                    api_key=config.huggingface.api_key,
+                    model="zai-org/GLM-4.7-Flash:novita",
+                    max_tokens=config.ai.max_tokens,
+                    temperature=config.ai.temperature
+                )
+            elif config.openrouter.api_key and config.openrouter.api_key not in ["", "YOUR_OPENROUTER_API_KEY_HERE"]:
+                print(f"Using OpenRouter API (fallback: {config.ai.model})")
+                self.summarizer = OpenRouterSummarizer(
+                    api_key=config.openrouter.api_key,
+                    model=config.ai.model,
+                    max_tokens=config.ai.max_tokens,
+                    temperature=config.ai.temperature
+                )
+            else:
+                print("Using Local Ollama (final fallback)")
+                self.summarizer = self.ollama_summarizer
 
         self.telegram_sender = TelegramSender(
             bot_token=config.telegram.bot_token,
             chat_id=config.telegram.chat_id
         )
 
-    def run_once(self) -> Dict:
-        """Run email processing in a single efficient pass."""
+    def run_once(self, check_stop=None) -> Dict:
+        """Run email processing in a single efficient pass.
+        
+        Args:
+            check_stop: Optional callback that returns True if processing should stop.
+        """
         report = {
             'all_processed': 0,
             'spam_count': 0,
@@ -127,13 +173,29 @@ class MailAgent:
             'summarized': [],
             'spam_details': [],
             'deleted_details': [],
-            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'by_account': {}  # New: Track stats per account
         }
 
         for email_config in self.config.emails:
+            # Check for stop signal between accounts
+            if check_stop and check_stop():
+                print("🛑 Processing stopped by user.")
+                break
+
             if not email_config.enabled:
                 print(f"Skipping disabled email: {email_config.email}")
                 continue
+
+            # Initialize account stats
+            report['by_account'][email_config.email] = {
+                'processed': 0,
+                'spam': 0,
+                'deleted': 0,
+                'summarized': 0,
+                'summaries': []
+            }
+            account_stats = report['by_account'][email_config.email]
 
             print(f"\n{'='*50}")
             print(f"Processing: {email_config.email}")
@@ -152,24 +214,40 @@ class MailAgent:
 
                 # PASS 1: Fetch newest 50 emails (Maintenance: Spam/Delete check)
                 print("\n--- Pass 1: Maintenance Scan (Newest 50) ---")
+                
+                # Check stop signal before fetch
+                if check_stop and check_stop():
+                    print("🛑 Processing stopped by user.")
+                    break
+                    
                 recent_emails = fetcher.fetch_all(limit=50)
                 
                 for email in recent_emails:
+                    if check_stop and check_stop():
+                        break
+
                     processed_uids.add(email.uid)
                     report['all_processed'] += 1
+                    account_stats['processed'] += 1
                     
                     result = self._apply_filters(fetcher, email)
                     if result['action'] == 'spam':
                         print(f"  [{email.date}] [SPAM] {email.subject[:40]}")
                         report['spam_count'] += 1
+                        account_stats['spam'] += 1
                         report['spam_details'].append({'from': email.from_, 'subject': email.subject, 'reason': result['reason']})
                     elif result['action'] == 'deleted':
                         print(f"  [{email.date}] [DELETED] {email.subject[:40]}")
                         report['deleted_count'] += 1
+                        account_stats['deleted'] += 1
                         report['deleted_details'].append({'from': email.from_, 'subject': email.subject, 'reason': result['reason']})
                     elif result['action'] == 'trusted':
                         print(f"  [{email.date}] [TRUSTED] {email.from_[:40]}")
                 
+                if check_stop and check_stop():
+                    print("🛑 Processing stopped by user.")
+                    break
+
                 # PASS 2: Fetch UNREAD emails (Summarization)
                 print("\n--- Pass 2: Unread Scan (Up to 200) ---")
                 # Using fetch_unread ensures we find unread emails even if they are old (deep in inbox)
@@ -180,6 +258,10 @@ class MailAgent:
                 now_utc = datetime.now(timezone.utc)
                 
                 for i, email in enumerate(unread_emails):
+                    if check_stop and check_stop():
+                        print("🛑 Processing stopped by user.")
+                        break
+
                     # Check age of email
                     is_old = False
                     if email.date_obj:
@@ -205,10 +287,12 @@ class MailAgent:
                              if result['action'] == 'spam':
                                  print(f"  [{email.date}] [SPAM] {email.subject[:40]}")
                                  report['spam_count'] += 1
+                                 account_stats['spam'] += 1
                                  report['spam_details'].append({'from': email.from_, 'subject': email.subject, 'reason': result['reason']})
                              else:
                                  print(f"  [{email.date}] [DELETED] {email.subject[:40]}")
                                  report['deleted_count'] += 1
+                                 account_stats['deleted'] += 1
                                  report['deleted_details'].append({'from': email.from_, 'subject': email.subject, 'reason': result['reason']})
                         continue
                     
@@ -224,12 +308,18 @@ class MailAgent:
                     if summary:
                         print(f"  [SUMMARY] {summary[:60]}...")
                         report['summarized_count'] += 1
-                        report['summarized'].append({
+                        account_stats['summarized'] += 1
+                        
+                        summary_entry = {
                             'account': email_config.email,
                             'from': email.from_,
                             'subject': email.subject,
                             'summary': summary
-                        })
+                        }
+                        
+                        report['summarized'].append(summary_entry)
+                        account_stats['summaries'].append(summary_entry)
+                        
                         fetcher.mark_as_read(email.uid)
 
                 fetcher.disconnect()
@@ -334,11 +424,11 @@ class MailAgent:
             if summary.startswith("[Error:") or summary.startswith("[Could not summarize"):
                 print(f"  [Primary AI Failed] {summary[:60]}...")
                 
-                # Fallback Layer 1: Gemini (if not already primary)
-                if self.config.ai.provider != "gemini" and self.config.gemini.api_key:
-                    print("  [FALLBACK 1] Trying Direct Gemini...")
-                    gemini = GeminiSummarizer(api_key=self.config.gemini.api_key, model="gemini-2.0-flash")
-                    summary = gemini.summarize(email_data)
+                # Fallback Layer 1: Hugging Face (if not already primary)
+                if self.config.ai.provider != "huggingface" and self.config.huggingface.api_key:
+                    print("  [FALLBACK 1] Trying Hugging Face (Mistral)...")
+                    hf = HuggingFaceSummarizer(api_key=self.config.huggingface.api_key)
+                    summary = hf.summarize(email_data)
                 
                 # Fallback Layer 2: OpenRouter (DeepSeek Free)
                 if (summary.startswith("[Error:") or summary.startswith("[Could not summarize")) and self.config.openrouter.api_key:

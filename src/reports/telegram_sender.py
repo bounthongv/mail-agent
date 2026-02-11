@@ -47,44 +47,62 @@ class TelegramSender:
         """Format report as Telegram message."""
         lines = []
 
+        lines.append("👋 *Hi Boss!* This is the summary of my work on your mail today.")
         lines.append("📧 *Email Processing Report*")
         lines.append("=" * 35)
         
         # Overall scan results
         lines.append(f"\n*📊 Total Emails Scanned:* {report_data.get('all_processed', 0)}")
-        lines.append(f"  • Moved to Spam: {report_data.get('all_spam_count', 0)}")
-        lines.append(f"  • Moved to Trash: {report_data.get('all_deleted_count', 0)}")
-        
-        # Unread email processing
-        lines.append(f"\n*📬 Unread Emails:* {report_data.get('processed', 0)}")
-        lines.append(f"  • Spam: {report_data.get('spam_count', 0)}")
-        lines.append(f"  • Deleted: {report_data.get('deleted_count', 0)}")
+        lines.append(f"  • Moved to Spam: {report_data.get('spam_count', 0)}")
+        lines.append(f"  • Moved to Trash: {report_data.get('deleted_count', 0)}")
         lines.append(f"  • Summarized: {report_data.get('summarized_count', 0)}")
         
-        lines.append("\n" + "=" * 35)
-
-        if report_data.get('summarized'):
-            lines.append("\n*✨ Email Summaries:*")
+        # Group by Account
+        by_account = report_data.get('by_account', {})
+        if by_account:
+            for account_email, stats in by_account.items():
+                if stats['processed'] == 0 and stats['summarized'] == 0 and stats['spam'] == 0 and stats['deleted'] == 0:
+                    continue
+                    
+                lines.append("\n" + "=" * 35)
+                lines.append(f"👤 *{account_email}*")
+                lines.append(f"  • Scanned: {stats['processed']}")
+                if stats['spam'] > 0: lines.append(f"  • Spam: {stats['spam']}")
+                if stats['deleted'] > 0: lines.append(f"  • Deleted: {stats['deleted']}")
+                if stats['summarized'] > 0: lines.append(f"  • Summaries: {stats['summarized']}")
+                
+                # Add summaries for this account
+                if stats.get('summaries'):
+                    lines.append("\n  *✨ Summaries:*")
+                    for i, email in enumerate(stats['summaries'], 1):
+                        lines.append(f"\n  *{i}. From:* `{email['from']}`")
+                        lines.append(f"     *Sub:* _{email['subject']}_")
+                        lines.append(f"     {email['summary']}")
+        
+        # Fallback for old format or if no account data
+        elif report_data.get('summarized'):
+            lines.append("\n" + "=" * 35)
+            lines.append("\n*✨ All Summaries:*")
             for i, email in enumerate(report_data['summarized'], 1):
-                # Show which email account this summary belongs to
                 account = email.get('account', 'Unknown')
                 lines.append(f"\n*{i}.* Account: `{account}`")
                 lines.append(f"From: `{email['from']}`")
                 lines.append(f"Subject: _{email['subject']}_")
                 lines.append(f"\n{email['summary']}")
         else:
-            lines.append("\n_No new emails to summarize._")
+            if not by_account:
+                lines.append("\n_No new emails to summarize._")
 
         if report_data.get('spam_details'):
             lines.append("\n" + "=" * 35)
-            lines.append("\n*🚫 Spam (Unread):*")
+            lines.append("\n*🚫 Spam Details:*")
             for item in report_data['spam_details']:
                 lines.append(f"\n• `{item['from']}`")
                 lines.append(f"  Reason: {item['reason']}")
 
         if report_data.get('deleted_details'):
             lines.append("\n" + "=" * 35)
-            lines.append("\n*🗑️ Deleted (Unread):*")
+            lines.append("\n*🗑️ Deleted Details:*")
             for item in report_data['deleted_details']:
                 lines.append(f"\n• `{item['from']}`")
                 lines.append(f"  Reason: {item['reason']}")
