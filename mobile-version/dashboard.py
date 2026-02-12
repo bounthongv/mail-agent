@@ -51,11 +51,26 @@ elif menu == "My Accounts":
         with st.form("add_account"):
             email = st.text_input("Email Address")
             password = st.text_input("App Password", type="password")
+            telegram_id = st.text_input("Telegram Chat ID (to receive summaries)")
+            
+            st.markdown("---")
+            st.subheader("Filter Patterns (One per line)")
+            trusted = st.text_area("Trusted Senders (Skip AI check)")
+            spam = st.text_area("Spam Keywords (Move to Spam)")
+            
             host = st.text_input("IMAP Host", value="imap.gmail.com")
             port = st.number_input("IMAP Port", value=993)
             
             if st.form_submit_button("Save Account"):
-                new_acc = EmailAccount(email=email, password=password, imap_host=host, imap_port=port)
+                new_acc = EmailAccount(
+                    email=email, 
+                    password=password, 
+                    telegram_chat_id=telegram_id,
+                    trusted_senders=trusted,
+                    spam_keywords=spam,
+                    imap_host=host, 
+                    imap_port=port
+                )
                 db.add(new_acc)
                 db.commit()
                 st.success(f"Added {email} successfully!")

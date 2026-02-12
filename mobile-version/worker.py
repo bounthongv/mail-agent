@@ -16,11 +16,13 @@ from core.fetcher import EmailFetcher
 from core.gemini_summarizer import GeminiSummarizer
 from core.huggingface_summarizer import HuggingFaceSummarizer
 from core.nvidia_summarizer import NvidiaSummarizer
+from reports.telegram_sender import TelegramSender
 
 # Load keys from environment
 GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
 HF_KEY = os.getenv("HUGGINGFACE_API_KEY", "")
 NVIDIA_KEY = os.getenv("NVIDIA_API_KEY", "")
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 
 def run_worker():
     print("🚀 Mail Agent Worker STARTED")
@@ -37,6 +39,12 @@ def run_worker():
 
         for acc in accounts:
             print(f"  - Processing: {acc.email}")
+            
+            # Setup per-user reporter
+            user_bot = None
+            if acc.telegram_chat_id and BOT_TOKEN:
+                user_bot = TelegramSender(bot_token=BOT_TOKEN, chat_id=acc.telegram_chat_id)
+
             fetcher = EmailFetcher(
                 email=acc.email,
                 password=acc.password,
@@ -47,6 +55,13 @@ def run_worker():
             try:
                 unread = fetcher.fetch_unread(limit=10)
                 for email in unread:
+                    # Apply Per-User Filtering logic here (Simple example)
+                    is_trusted = any(t.strip().lower() in email.from_.lower() for t in acc.trusted_senders.split('\n') if t.strip())
+                    
+                    if is_trusted:
+                        print(f"    [Trusted] {email.from_}")
+                        # Logic to skip AI or handle differently
+                    
                     print(f"    Summarizing: {email.subject[:30]}...")
                     
                     email_data = {
@@ -75,6 +90,10 @@ def run_worker():
                     )
                     db.add(new_summary)
                     db.commit()
+                    
+                    # Send to user's specific Telegram
+                    if user_bot:
+                        user_bot.send_summary({'summarized': [{'subject': email.subject, 'summary': summary_text, 'from': email.from_}]})
                     
                     # Mark as read
                     fetcher.mark_as_read(email.uid)
