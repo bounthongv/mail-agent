@@ -50,10 +50,14 @@ class GeminiSummarizer:
 
             result = response.json()
             if "candidates" in result and len(result["candidates"]) > 0:
-                summary = result["candidates"][0]["content"]["parts"][0]["text"]
-                return summary.strip()
+                content = result["candidates"][0].get("content", {})
+                parts = content.get("parts", [])
+                if parts and "text" in parts[0]:
+                    summary = parts[0]["text"]
+                    return summary.strip() if summary else "[Empty response from Gemini]"
+                return "[Error: No text in Gemini response]"
             else:
-                return "[Error: No response from Gemini]"
+                return "[Error: No response candidates from Gemini]"
 
         except requests.exceptions.RequestException as e:
             print(f"Error calling Gemini API: {e}")

@@ -4,7 +4,7 @@ from typing import Dict, Optional
 
 
 class NvidiaSummarizer:
-    def __init__(self, api_key: str, model: str = "moonshotai/kimi-k1.5",
+    def __init__(self, api_key: str, model: str = "moonshotai/kimi-k2.5",
                  max_tokens: int = 300, temperature: float = 0.3):
         self.api_key = api_key
         self.model = model
@@ -36,7 +36,7 @@ class NvidiaSummarizer:
                 self.api_url,
                 headers=headers,
                 json=payload,
-                timeout=180
+                timeout=300
             )
             
             if response.status_code != 200:
@@ -46,10 +46,13 @@ class NvidiaSummarizer:
 
             result = response.json()
             if "choices" in result and len(result["choices"]) > 0:
-                summary = result["choices"][0]["message"]["content"]
-                return summary.strip()
+                summary = result["choices"][0].get("message", {}).get("content")
+                if summary is not None:
+                    return summary.strip()
+                else:
+                    return "[Error: Empty content from NVIDIA]"
             else:
-                return "[Error: No response from NVIDIA]"
+                return "[Error: No choices in NVIDIA response]"
 
         except requests.exceptions.RequestException as e:
             print(f"Error calling NVIDIA API: {e}")

@@ -23,6 +23,11 @@ else:
 if base_dir not in sys.path:
     sys.path.insert(0, base_dir)
 
+# Also add src to path to support internal imports in src/main.py
+src_dir = os.path.join(base_dir, 'src')
+if os.path.exists(src_dir) and src_dir not in sys.path:
+    sys.path.insert(0, src_dir)
+
 from src.config_loader import load_config
 from src.main import MailAgent
 from src.scheduler import Scheduler

@@ -46,10 +46,13 @@ class GroqSummarizer:
 
             result = response.json()
             if "choices" in result and len(result["choices"]) > 0:
-                summary = result["choices"][0]["message"]["content"]
-                return summary.strip()
+                summary = result["choices"][0].get("message", {}).get("content")
+                if summary is not None:
+                    return summary.strip()
+                else:
+                    return "[Error: Empty content from Groq]"
             else:
-                return "[Error: No response from Groq]"
+                return "[Error: No choices in Groq response]"
 
         except requests.exceptions.RequestException as e:
             print(f"Error calling Groq API: {e}")

@@ -1,0 +1,79 @@
+Testing this on your local network is the perfect way to understand the "Server-Client" relationship before you move to the cloud. In this setup, your notebook becomes
+  the Server, and your phone becomes the Client.
+
+  Here is your step-by-step guide to running the local "Cloud" test.
+
+  ---
+
+
+  Phase 1: Prepare the "Server" (Your Notebook)
+
+  You need to run two separate processes at the same time. Open two terminal windows (PowerShell) in your D:\mail-agent directory.
+
+
+  Terminal 1: The Brain (Background Worker)
+  This script stays hidden and does the hard work of fetching and summarizing.
+   1. Activate your venv: venv\scripts\activate
+   2. Run the worker:
+   1     python mobile-version/worker.py
+       * You should see: "🚀 Mail Agent Worker STARTED"
+
+  Terminal 2: The Face (Dashboard)
+  This provides the website that your phone will connect to.
+   1. Activate your venv: venv\scripts\activate
+   2. Run Streamlit with a special flag to allow your phone to connect:
+
+
+   1     streamlit run mobile-version/dashboard.py --server.address 0.0.0.0
+       * The `--server.address 0.0.0.0` tells your notebook to listen for connections from other devices (like your phone).
+
+  ---
+
+
+  Phase 2: Find your Server's "Address"
+
+
+  Your phone needs to know where your notebook is on your Wi-Fi.
+   1. In a new terminal, type: ipconfig
+   2. Look for IPv4 Address under your Wi-Fi adapter (it usually looks like 192.168.1.XX or 10.0.0.XX).
+       * Example: `192.168.1.50`
+
+  ---
+
+  Phase 3: Connect from your Phone
+
+
+   1. Ensure your Phone and Notebook are on the same Wi-Fi.
+   2. Open Safari (iPhone) or Chrome (Android).
+   3. Type the address into the browser: http://192.168.1.50:8501 (Replace 192.168.1.50 with your actual IP).
+   4. The Result: You should see the "Mail Agent Mobile" dashboard on your phone screen!
+
+  ---
+
+  Phase 4: Thorough Testing (How it works together)
+
+  Now that you are connected, follow this flow to see the magic:
+
+
+   1. On your Phone: Go to the "My Accounts" tab.
+   2. Input Credentials:
+       * Enter your test email and App Password.
+       * Telegram Chat ID: Enter your personal Chat ID (If you don't know it, message @userinfobot on Telegram).
+       * Trusted Senders/Spam: Add 1 or 2 lines for testing.
+       * Click "Save Account".
+   3. Check the Notebook Terminal: You will see the Worker terminal detect the new account and start "Checking 1 accounts...".
+   4. The Summarization:
+       * The Worker will call Gemini.
+       * If Gemini hits a limit, you will see the worker wait 30 seconds and then try Hugging Face.
+       * Once finished, the summary is saved to the data/mail_agent.db.
+   5. View on Phone: Refresh the "Dashboard" tab on your phone. You will see the summary appear in the list.
+   6. Check Telegram: You should receive a notification on your phone from your Bot with that same summary.
+
+  ---
+
+
+  Summary of the "Loop" you are testing:
+   * Phone: Used for Input (Adding accounts) and Viewing (Summaries).
+   * Notebook (Worker): Used for Processing (Mail -> AI -> DB).
+   * Notebook (Dashboard): Used for Hosting the website.
+   * Database: The Bridge that connects them all.

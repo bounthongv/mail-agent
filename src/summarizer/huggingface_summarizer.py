@@ -49,10 +49,13 @@ class HuggingFaceSummarizer:
 
             result = response.json()
             if "choices" in result and len(result["choices"]) > 0:
-                summary = result["choices"][0]["message"]["content"]
-                return summary.strip()
+                summary = result["choices"][0].get("message", {}).get("content")
+                if summary is not None:
+                    return summary.strip()
+                else:
+                    return "[Error: Empty content from Hugging Face]"
             else:
-                return "[Error: No response from Hugging Face]"
+                return "[Error: No choices in Hugging Face response]"
 
         except requests.exceptions.RequestException as e:
             print(f"Error calling Hugging Face API: {e}")

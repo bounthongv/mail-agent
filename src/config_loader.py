@@ -54,8 +54,13 @@ class GroqConfig:
 @dataclass
 class LocalAIConfig:
     enabled: bool
-    provider: str  # "qwen" or "ollama"
+    provider: str
     model: str
+    url: Optional[str] = None
+    api_key: Optional[str] = None
+    # Secondary node (e.g. Windows Fallback)
+    secondary_url: Optional[str] = None
+    secondary_model: Optional[str] = None
 
 
 @dataclass
@@ -180,8 +185,12 @@ def load_config(config_dir: str = "config") -> AppConfig:
 
     localai = LocalAIConfig(
         enabled=settings.get('localai', {}).get('enabled', False),
-        provider=settings.get('localai', {}).get('provider', 'qwen'),
-        model=settings.get('localai', {}).get('model', 'qwen2.5:3b')
+        provider=settings.get('localai', {}).get('provider', 'ollama'),
+        model=settings.get('localai', {}).get('model', 'qwen2.5:3b'),
+        url=settings.get('localai', {}).get('url'),
+        api_key=credentials.get('localai', {}).get('api_key', '').strip(),
+        secondary_url=settings.get('localai', {}).get('secondary_url'),
+        secondary_model=settings.get('localai', {}).get('secondary_model')
     )
 
     return AppConfig(

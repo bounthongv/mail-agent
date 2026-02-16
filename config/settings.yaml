@@ -5,16 +5,22 @@ schedule:
 
 # AI Settings
 ai:
-  provider: "gemini"
-  model: "gemini-2.0-flash"
+  provider: "ollama"
+  model: "kimi-k2.5:cloud"
   max_tokens: 300
   temperature: 0.3
 
-# Local AI Settings
+# Local AI / Notebook Settings
 localai:
   enabled: true
   provider: "ollama"
-  model: "qwen2.5:1.5b"
+  # Primary: Windows Server (Fastest)
+  model: "kimi-k2.5:cloud"
+  url: "http://209.126.1.13:11434/api/generate"
+  
+  # Secondary: Ubuntu Server (Fallback)
+  secondary_url: "http://202.137.147.5:11434/api/generate"
+  secondary_model: "glm-4.6:cloud"
 
 # Report Settings
 report:

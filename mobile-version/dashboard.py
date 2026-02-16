@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import sys
 import os
+import threading
 from sqlalchemy.orm import Session
 
 # Add the app directory to the path
@@ -9,12 +10,19 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
 
 from db.database import SessionLocal, init_db
 from db.models import EmailAccount, Summary
+from worker import run_worker
 
 # Set page config for mobile/tablet feel
 st.set_page_config(page_title="Mail Agent Mobile", page_icon="📧", layout="wide")
 
 # Ensure database is initialized
 init_db()
+
+# Start the background mail-checker thread if not already running
+if 'worker_started' not in st.session_state:
+    thread = threading.Thread(target=run_worker, daemon=True)
+    thread.start()
+    st.session_state['worker_started'] = True
 
 def get_db():
     db = SessionLocal()

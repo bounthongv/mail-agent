@@ -65,7 +65,21 @@ class MailAgent:
         self.trusted_senders = self._load_trusted_senders()
 
         # Initialize dedicated fallback summarizers
-        self.ollama_summarizer = LocalSummarizer(provider="ollama", model=config.localai.model)
+        self.ollama_summarizer = LocalSummarizer(
+            provider="ollama", 
+            model=config.localai.model,
+            url=config.localai.url
+        )
+        
+        # Secondary Local Fallback (Windows)
+        self.windows_summarizer = None
+        if config.localai.secondary_url:
+            self.windows_summarizer = LocalSummarizer(
+                provider="ollama",
+                model=config.localai.secondary_model or config.localai.model,
+                url=config.localai.secondary_url
+            )
+            
         self.qwen_summarizer = LocalSummarizer(provider="qwen", model="qwen2.5:3b")
 
         # Priority: Configured provider -> Fallback chain
@@ -401,55 +415,60 @@ class MailAgent:
         return result
 
     def _summarize_email(self, email: EmailMessage) -> str:
-        """Summarize a single email with rate limiting, retry logic, and multi-layer fallback."""
+        """Summarize email with priority: Local AI (Notebook/Ollama) -> Configured Cloud -> Fallbacks."""
         try:
             email_data = {
                 'from': email.from_,
                 'subject': email.subject,
                 'body': email.text or email.html
             }
-            # Add delay to avoid rate limiting
+            # Small delay
             time.sleep(1)
             
-            # 1. Try primary summarizer
-            summary = self.summarizer.summarize(email_data)
-            
-            # Smart Retry for Rate Limiting (429)
-            if "429" in summary or "Too Many Requests" in summary:
-                print("  [Rate Limit] Primary AI quota hit. Waiting 30s for reset...")
-                time.sleep(30)
+            # --- Tier 1: Local AI (Primary - Ubuntu) ---
+            if self.config.ai.provider.lower() == "ollama" or self.config.localai.enabled:
+                print(f"  [Tier 1] Trying Ubuntu AI at {self.ollama_summarizer.url}...")
+                summary = self.ollama_summarizer.summarize(email_data)
+                if not summary.startswith("[Error:") and not summary.startswith("[Ollama error"):
+                    return summary
+                print(f"  [Tier 1 Failed] {summary[:60]}...")
+
+            # --- Tier 2: Local AI (Secondary - Windows) ---
+            if self.windows_summarizer:
+                print(f"  [Tier 2] Trying Windows AI at {self.windows_summarizer.url}...")
+                summary = self.windows_summarizer.summarize(email_data)
+                if not summary.startswith("[Error:") and not summary.startswith("[Ollama error"):
+                    return summary
+                print(f"  [Tier 2 Failed] {summary[:60]}...")
+
+            # --- Tier 3: Configured Cloud Provider ---
+            if self.config.ai.provider.lower() != "ollama":
+                print(f"  [Cloud] Trying {self.config.ai.provider}...")
                 summary = self.summarizer.summarize(email_data)
+                
+                # Smart Retry for Rate Limiting (429)
+                if "429" in summary or "Too Many Requests" in summary:
+                    print("  [Rate Limit] Cloud AI quota hit. Waiting 45s...")
+                    time.sleep(45)
+                    summary = self.summarizer.summarize(email_data)
+                
+                if not summary.startswith("[Error:") and not summary.startswith("[Could not summarize"):
+                    return summary
 
-            # 2. Fallback Chain
-            if summary.startswith("[Error:") or summary.startswith("[Could not summarize"):
-                print(f"  [Primary AI Failed] {summary[:60]}...")
-                
-                # Fallback Layer 1: Hugging Face (if not already primary)
-                if self.config.ai.provider != "huggingface" and self.config.huggingface.api_key:
-                    print("  [FALLBACK 1] Trying Hugging Face (Mistral)...")
-                    hf = HuggingFaceSummarizer(api_key=self.config.huggingface.api_key)
-                    summary = hf.summarize(email_data)
-                
-                # Fallback Layer 2: OpenRouter (DeepSeek Free)
-                if (summary.startswith("[Error:") or summary.startswith("[Could not summarize")) and self.config.openrouter.api_key:
-                    print("  [FALLBACK 2] Trying OpenRouter (DeepSeek Free)...")
-                    # Dynamically use a free model via OpenRouter
-                    or_summarizer = OpenRouterSummarizer(
-                        api_key=self.config.openrouter.api_key,
-                        model="deepseek/deepseek-r1:free" 
-                    )
-                    summary = or_summarizer.summarize(email_data)
+            # --- Tier 3: Cloud Fallback Chain (NVIDIA, Gemini, etc.) ---
+            print("  [Secondary Fallbacks] Trying NVIDIA/Gemini...")
+            
+            # Fallback Layer 1: NVIDIA
+            if self.config.nvidia.api_key:
+                nvidia = NvidiaSummarizer(api_key=self.config.nvidia.api_key, model="moonshotai/kimi-k2.5")
+                summary = nvidia.summarize(email_data)
+                if not summary.startswith("[Error:"): return summary
 
-                # Fallback Layer 3: Local AI (Ollama)
-                if (summary.startswith("[Error:") or summary.startswith("[Could not summarize")):
-                    if self.config.ai.provider != "ollama":
-                        print("  [FALLBACK 3] Trying Local Ollama...")
-                        summary = self.ollama_summarizer.summarize(email_data)
-                
-                # Fallback Layer 4: Local AI (Qwen CLI) - The absolute backup
-                if (summary.startswith("[Error:") or summary.startswith("[Could not summarize")):
-                    print("  [FALLBACK 4] Trying Local Qwen CLI (Last Resort)...")
-                    summary = self.qwen_summarizer.summarize(email_data)
+            # Fallback Layer 2: Gemini
+            if self.config.gemini.api_key:
+                gemini = GeminiSummarizer(api_key=self.config.gemini.api_key, model="gemini-2.0-flash")
+                summary = gemini.summarize(email_data)
+                if not summary.startswith("[Error:"): return summary
             
             return summary
         except Exception as e:

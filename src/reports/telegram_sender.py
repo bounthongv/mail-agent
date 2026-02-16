@@ -37,11 +37,30 @@ class TelegramSender:
     async def _send_async(self, message: str):
         """Async implementation of sending message."""
         bot = Bot(token=self.bot_token)
-        await bot.send_message(
-            chat_id=self.chat_id,
-            text=message,
-            parse_mode='Markdown'
-        )
+        try:
+            await bot.send_message(
+                chat_id=self.chat_id,
+                text=message,
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            # Fallback: if Markdown fails, send as plain text
+            print(f"Markdown send failed, trying plain text: {e}")
+            await bot.send_message(
+                chat_id=self.chat_id,
+                text=message
+            )
+
+    def _clean_markdown(self, text: str) -> str:
+        """Escape Markdown special characters that are not part of our formatting."""
+        if not text:
+            return ""
+        # Characters that can break Markdown if not balanced
+        chars = ['*', '_', '`', '[']
+        cleaned = text
+        for char in chars:
+            cleaned = cleaned.replace(char, '')
+        return cleaned
 
     def _format_message(self, report_data: Dict) -> str:
         """Format report as Telegram message."""
@@ -75,9 +94,13 @@ class TelegramSender:
                 if stats.get('summaries'):
                     lines.append("\n  *✨ Summaries:*")
                     for i, email in enumerate(stats['summaries'], 1):
-                        lines.append(f"\n  *{i}. From:* `{email['from']}`")
-                        lines.append(f"     *Sub:* _{email['subject']}_")
-                        lines.append(f"     {email['summary']}")
+                        from_clean = self._clean_markdown(email['from'])
+                        sub_clean = self._clean_markdown(email['subject'])
+                        sum_clean = self._clean_markdown(email['summary'])
+                        
+                        lines.append(f"\n  *{i}. From:* `{from_clean}`")
+                        lines.append(f"     *Sub:* _{sub_clean}_")
+                        lines.append(f"     {sum_clean}")
         
         # Fallback for old format or if no account data
         elif report_data.get('summarized'):
@@ -85,10 +108,14 @@ class TelegramSender:
             lines.append("\n*✨ All Summaries:*")
             for i, email in enumerate(report_data['summarized'], 1):
                 account = email.get('account', 'Unknown')
+                from_clean = self._clean_markdown(email['from'])
+                sub_clean = self._clean_markdown(email['subject'])
+                sum_clean = self._clean_markdown(email['summary'])
+                
                 lines.append(f"\n*{i}.* Account: `{account}`")
-                lines.append(f"From: `{email['from']}`")
-                lines.append(f"Subject: _{email['subject']}_")
-                lines.append(f"\n{email['summary']}")
+                lines.append(f"From: `{from_clean}`")
+                lines.append(f"Subject: _{sub_clean}_")
+                lines.append(f"\n{sum_clean}")
         else:
             if not by_account:
                 lines.append("\n_No new emails to summarize._")
@@ -97,15 +124,19 @@ class TelegramSender:
             lines.append("\n" + "=" * 35)
             lines.append("\n*🚫 Spam Details:*")
             for item in report_data['spam_details']:
-                lines.append(f"\n• `{item['from']}`")
-                lines.append(f"  Reason: {item['reason']}")
+                from_clean = self._clean_markdown(item['from'])
+                reason_clean = self._clean_markdown(item['reason'])
+                lines.append(f"\n• `{from_clean}`")
+                lines.append(f"  Reason: {reason_clean}")
 
         if report_data.get('deleted_details'):
             lines.append("\n" + "=" * 35)
             lines.append("\n*🗑️ Deleted Details:*")
             for item in report_data['deleted_details']:
-                lines.append(f"\n• `{item['from']}`")
-                lines.append(f"  Reason: {item['reason']}")
+                from_clean = self._clean_markdown(item['from'])
+                reason_clean = self._clean_markdown(item['reason'])
+                lines.append(f"\n• `{from_clean}`")
+                lines.append(f"  Reason: {reason_clean}")
 
         lines.append("\n" + "=" * 35)
         lines.append(f"🕐 _{report_data.get('timestamp', 'N/A')}_")

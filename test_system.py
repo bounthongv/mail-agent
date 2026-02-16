@@ -23,7 +23,10 @@ def test_summary():
     print(f"   Telegram Chat ID: {config.telegram.chat_id}")
     print(f"   Primary AI: {config.ai.provider} ({config.ai.model})")
     if config.localai.enabled:
-        print(f"   Backup AI: {config.localai.provider} ({config.localai.model})")
+        print(f"   Local AI (Ollama): Enabled")
+        print(f"     - Provider: {config.localai.provider}")
+        print(f"     - URL: {config.localai.url}")
+        print(f"     - Model: {config.localai.model}")
 
 
 if __name__ == "__main__":

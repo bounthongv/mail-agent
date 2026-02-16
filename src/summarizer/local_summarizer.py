@@ -6,9 +6,10 @@ from typing import Dict, Optional
 
 
 class LocalSummarizer:
-    def __init__(self, provider: str = "qwen", model: str = "qwen2.5:3b"):
+    def __init__(self, provider: str = "ollama", model: str = "qwen2.5:3b", url: str = None):
         self.provider = provider  # "qwen" or "ollama"
         self.model = model
+        self.url = url or "http://localhost:11434/api/generate"
 
     def summarize(self, email_data: Dict[str, str]) -> str:
         """Summarize email using local CLI tool."""
@@ -65,7 +66,7 @@ class LocalSummarizer:
         try:
             import requests
             response = requests.post(
-                "http://localhost:11434/api/generate",
+                self.url,
                 json={
                     "model": self.model,
                     "prompt": prompt,
@@ -77,9 +78,9 @@ class LocalSummarizer:
                 result = response.json()
                 return result.get("response", "").strip()
             else:
-                return f"[Ollama error: {response.status_code}]"
+                return f"[Ollama error: {response.status_code} at {self.url}]"
         except Exception as e:
-            return f"[Ollama error: {str(e)[:50]}]"
+            return f"[Ollama error: {str(e)[:50]} at {self.url}]"
 
     def _create_prompt(self, email_data: Dict[str, str]) -> str:
         """Create summarization prompt."""
