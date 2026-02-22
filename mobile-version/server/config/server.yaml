@@ -1,0 +1,45 @@
+# Mail Agent Server Configuration
+# ================================
+# This file is managed by ADMIN only
+# User-specific settings are stored on mobile devices
+
+# AI Provider Configuration
+ai:
+  provider: "gemini"
+  model: "gemini-2.0-flash"
+  max_tokens: 300
+  temperature: 0.3
+
+# AI Provider API Keys (choose one as primary)
+api_keys:
+  gemini: "YOUR_GEMINI_API_KEY_HERE"
+  openrouter: "YOUR_OPENROUTER_API_KEY_HERE"
+  huggingface: "YOUR_HUGGINGFACE_TOKEN_HERE"
+  nvidia: "YOUR_NVIDIA_API_KEY_HERE"
+
+# Local AI URLs (optional, for fallback)
+local_ai:
+  windows_url: "http://209.126.1.13:11434/api/generate"
+  ubuntu_url: "http://202.137.147.5:11434/api/generate"
+
+# Telegram Bot Configuration
+# One bot token serves ALL users
+# Each user has their own chat_id (stored in their mobile config)
+telegram:
+  bot_token: "YOUR_TELEGRAM_BOT_TOKEN_HERE"
+
+# Worker Configuration
+worker:
+  interval_minutes: 10          # How often to check emails (global)
+  max_emails_per_check: 50      # Max emails to process per user per check
+
+# Summary Retention
+retention:
+  days: 30                      # Keep summaries for 30 days
+  auto_cleanup: true            # Automatically delete old summaries
+
+# Server Settings
+server:
+  host: "0.0.0.0"
+  port: 8000
+  debug: false

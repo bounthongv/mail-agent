@@ -29,6 +29,7 @@ Upload the `mobile-version` folder to your home directory on Ubuntu. You can use
 Navigate to the folder and install the required Python libraries:
 ```bash
 cd mobile-version
+# setup ven first
 pip install -r requirements.txt
 # Ensure specifically needed web/db libraries are present
 pip install streamlit sqlalchemy passlib python-dotenv requests imap_tools fastapi uvicorn
@@ -39,7 +40,8 @@ Create or edit the `.env` file in the `mobile-version` directory:
 ```bash
 nano .env
 ```
-Add your configuration (matching your Private AI setup):
+
+Add your configuration with **multi-user JSON structure** (matching your existing credentials):
 ```env
 # AI Server Endpoints
 WINDOWS_AI_URL=http://209.126.1.13:11434/api/generate
@@ -48,33 +50,82 @@ UBUNTU_AI_URL=http://localhost:11434/api/generate
 # API Keys (Fallbacks)
 GEMINI_API_KEY=your_gemini_key
 TELEGRAM_BOT_TOKEN=your_bot_token
+
+# Multi-User Configuration (JSON Array)
+USERS_CONFIG=[{
+  "user_id": "7252862418",
+  "telegram_chat_id": "7252862418",
+  "emails": [
+    {
+      "email": "bounthongv@gmail.com",
+      "password": "pckq vqbi dlnd bsmm",
+      "imap_host": "imap.gmail.com",
+      "imap_port": 993,
+      "enabled": true
+    }
+  ],
+  "patterns": {
+    "trusted_senders": "support@company.com,admin@company.com",
+    "spam_keywords": "casino,poker,lottery,free money",
+    "delete_keywords": "unsubscribe,promotional,newsletter"
+  }
+}]
 ```
 
-### 5. Initialize the Database
-This creates the `data/mail_agent.db` file where all summaries and accounts are stored.
-```bash
-python3 init_db.py
+**🔍 Key Changes:**
+- ✅ **Email accounts & passwords**: Now in JSON structure within `USERS_CONFIG`
+- ✅ **Telegram chat_id**: Per-user in the JSON structure  
+- ✅ **Patterns**: Stored as JSON patterns for each user
+- ✅ **Multi-user ready**: Add more user objects to the JSON array
+- ✅ **Consistent**: Matches the structure of your existing `credentials.yaml`
+
+---
+
+## 🔄 User & Database Workflow
+
+The system uses a **person_id** that you manually create in the `.env` file. This ID connects all data (email accounts, summaries, reports) to a specific user in the database.
+
+### **1. You Create person_id in .env**
+Manually assign unique person_ids in the `USERS_CONFIG` section of `.env`:
+```env
+USERS_CONFIG=[{
+  "person_id": "john_doe_001",
+  "telegram_chat_id": "7252862418",
+  "emails": [
+    {
+      "email": "john@gmail.com",
+      "password": "your_app_password",
+      "imap_host": "imap.gmail.com",
+      "imap_port": 993,
+      "enabled": true
+    }
+  ],
+  "patterns": {
+    "trusted_senders": "support@company.com",
+    "spam_keywords": "casino,lottery",
+    "delete_keywords": "unsubscribe"
+  }
+}]
 ```
 
-### 6. Start the Background Worker (The Brain)
-Use `nohup` to keep the worker running even after you disconnect from SSH:
-```bash
-nohup python3 worker.py > worker.log 2>&1 &
-```
-*To check if it's running:* `tail -f worker.log`
+### **2. Database Stores person_id**
+When the worker starts, it syncs data from `.env` to the database:
+- **`EmailAccount.person_id`** - Groups all email accounts belonging to a person
+- **`Summary.person_id`** - Allows queries like "all summaries for person X"
 
-### 7. Start the Web Dashboard (The Face)
-Run Streamlit and bind it to your public IP:
-```bash
-nohup streamlit run dashboard.py --server.port 8501 --server.address 0.0.0.0 > dashboard.log 2>&1 &
-```
+### **3. How It Works**
+1. Worker reads `USERS_CONFIG` from `.env` on startup
+2. Creates/updates email accounts in the database with your `person_id`
+3. Every summary saved includes `person_id` for grouping
+4. You can query: "All summaries for person_id 'john_doe_001'"
 
-### 8. Start the Flutter API Wrapper (The Bridge)
-Run the FastAPI service to allow your Flutter app to fetch summaries:
-```bash
-nohup python3 api.py > api.log 2>&1 &
-```
-*The API will run on port 8000.*
+### **4. Benefits**
+- ✅ You control person_id manually (no auto-generation)
+- ✅ Consistent across `.env` and database
+- ✅ Group multiple emails under one person
+- ✅ Easy person-based queries and reports
+
+**Example person_ids:** `user_001`, `john_doe`, `company_admin` - choose any unique identifier you prefer.
 
 ---
 

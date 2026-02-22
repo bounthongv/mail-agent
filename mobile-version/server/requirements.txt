@@ -1,8 +1,8 @@
-streamlit
+fastapi
+uvicorn
 sqlalchemy
 pyyaml
+pydantic
 requests
 imap-tools
 python-telegram-bot
-python-dotenv
-bcrypt
