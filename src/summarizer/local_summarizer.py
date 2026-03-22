@@ -13,6 +13,7 @@ class LocalSummarizer:
 
     def summarize(self, email_data: Dict[str, str]) -> str:
         """Summarize email using local CLI tool."""
+        print(f"  [DEBUG] LocalSummarizer.summarize: provider={self.provider}, model={self.model}, url={self.url}")
         prompt = self._create_prompt(email_data)
 
         if self.provider == "qwen":
@@ -65,6 +66,9 @@ class LocalSummarizer:
         """Use Ollama API to summarize."""
         try:
             import requests
+            # Debug log
+            # print(f"  [DEBUG] Ollama Request: URL={self.url}, Model={self.model}")
+            
             response = requests.post(
                 self.url,
                 json={
@@ -78,9 +82,10 @@ class LocalSummarizer:
                 result = response.json()
                 return result.get("response", "").strip()
             else:
-                return f"[Ollama error: {response.status_code} at {self.url}]"
+                # print(f"  [DEBUG] Ollama Error Response: {response.text}")
+                return f"[Ollama error: {response.status_code} at {self.url} (Model: {self.model})]"
         except Exception as e:
-            return f"[Ollama error: {str(e)[:50]} at {self.url}]"
+            return f"[Ollama error: {str(e)[:50]} at {self.url} (Model: {self.model})]"
 
     def _create_prompt(self, email_data: Dict[str, str]) -> str:
         """Create summarization prompt."""
@@ -108,7 +113,9 @@ Summary:"""
                 return True
             elif self.provider == "ollama":
                 import requests
-                response = requests.get("http://localhost:11434/api/tags", timeout=5)
+                # Use base URL for tags check
+                base_url = self.url.rsplit('/api/', 1)[0]
+                response = requests.get(f"{base_url}/api/tags", timeout=5)
                 return response.status_code == 200
         except:
             pass

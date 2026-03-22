@@ -15,9 +15,9 @@ localai:
   enabled: true
   provider: "ollama"
   # Primary: Windows Server (Fastest)
-  model: "kimi-k2.5:cloud"
+  model: "llama3.2:3b"
   url: "http://209.126.1.13:11434/api/generate"
-  
+
   # Secondary: Ubuntu Server (Fallback)
   secondary_url: "http://202.137.147.5:11434/api/generate"
   secondary_model: "glm-4.6:cloud"

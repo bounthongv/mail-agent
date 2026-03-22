@@ -19,6 +19,22 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   final RefreshController _refreshController = RefreshController();
 
+  /// Get icon for error type
+  IconData _getErrorIcon(SyncErrorType type) {
+    switch (type) {
+      case SyncErrorType.noInternet:
+        return Icons.wifi_off_outlined;
+      case SyncErrorType.timeout:
+        return Icons.timer_off_outlined;
+      case SyncErrorType.serverError:
+        return Icons.error_outline;
+      case SyncErrorType.invalidResponse:
+        return Icons.warning_amber_outlined;
+      case SyncErrorType.unknown:
+        return Icons.help_outline;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -124,21 +140,45 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       decoration: BoxDecoration(
                         color: Colors.red.shade50,
                         borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.red.shade200),
                       ),
-                      child: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.error_outline, color: Colors.red.shade700),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              syncService.error!,
-                              style: TextStyle(color: Colors.red.shade700),
+                          Row(
+                            children: [
+                              Icon(
+                                _getErrorIcon(syncService.error!.type),
+                                color: Colors.red.shade700,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  syncService.error!.userMessage,
+                                  style: TextStyle(
+                                    color: Colors.red.shade700,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.close),
+                                color: Colors.red.shade700,
+                                onPressed: syncService.clearError,
+                              ),
+                            ],
+                          ),
+                          if (syncService.retryCount > 0)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Text(
+                                'Retry attempt ${syncService.retryCount}/${SyncService.maxRetries}',
+                                style: TextStyle(
+                                  color: Colors.red.shade600,
+                                  fontSize: 12,
+                                ),
+                              ),
                             ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.close),
-                            onPressed: syncService.clearError,
-                          ),
                         ],
                       ),
                     ),
