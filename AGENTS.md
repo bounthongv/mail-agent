@@ -124,7 +124,7 @@ src/
 │   ├── gemini_summarizer.py
 │   └── ...
 └── reports/
-    └── telegram_sender.py    # Telegram integration
+    └── discord_sender.py    # Discord integration
 ```
 
 ### Key Patterns
@@ -152,7 +152,7 @@ else:
 - imap-tools>=0.5.0
 - PyYAML>=6.0
 - requests>=2.31.0
-- python-telegram-bot>=20.0
+- discord.py>=2.3.0
 - torch, transformers (for local AI)
 
 ### Security Notes

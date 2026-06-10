@@ -35,7 +35,7 @@ class EmailAccount(Base):
     password = Column(String, nullable=False)
     imap_host = Column(String, default='imap.gmail.com')
     imap_port = Column(Integer, default=993)
-    telegram_chat_id = Column(String, nullable=True)
+    discord_channel_id = Column(String, nullable=True)
     
     # Store patterns as comma-separated strings
     trusted_senders = Column(Text, default="")

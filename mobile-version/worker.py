@@ -19,13 +19,14 @@ from core.local_summarizer import LocalSummarizer
 from core.gemini_summarizer import GeminiSummarizer
 from core.huggingface_summarizer import HuggingFaceSummarizer
 from core.nvidia_summarizer import NvidiaSummarizer
-from reports.telegram_sender import TelegramSender
+from reports.discord_sender import DiscordSender
 
 # Load keys from environment
 GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
 HF_KEY = os.getenv("HUGGINGFACE_API_KEY", "")
 NVIDIA_KEY = os.getenv("NVIDIA_API_KEY", "")
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN", "")
+DISCORD_CHANNEL_ID = os.getenv("DISCORD_CHANNEL_ID", "")
 
 # Load Private AI IPs from environment
 WINDOWS_AI_URL = os.getenv("WINDOWS_AI_URL", "http://209.126.1.13:11434/api/generate")
@@ -53,7 +54,7 @@ def initialize_user_accounts():
     try:
         for user in USERS:
             person_id = user.get("person_id") or user.get("user_id")  # Support both keys
-            telegram_chat_id = user.get("telegram_chat_id")
+            discord_channel_id = user.get("discord_channel_id")
             patterns = user.get("patterns", {})
             temp_password = user.get("temp_password", "changeme123")  # Default temp password
             
@@ -86,7 +87,7 @@ def initialize_user_accounts():
                         password=email_config["password"],
                         imap_host=email_config.get("imap_host", "imap.gmail.com"),
                         imap_port=email_config.get("imap_port", 993),
-                        telegram_chat_id=telegram_chat_id,
+                        discord_channel_id=discord_channel_id,
                         trusted_senders=patterns.get("trusted_senders", ""),
                         spam_keywords=patterns.get("spam_keywords", ""),
                         delete_keywords=patterns.get("delete_keywords", ""),
@@ -98,7 +99,7 @@ def initialize_user_accounts():
                     # Update existing account
                     existing.person_id = person_id
                     existing.user_id = db_user.id
-                    existing.telegram_chat_id = telegram_chat_id
+                    existing.discord_channel_id = discord_channel_id
                     existing.trusted_senders = patterns.get("trusted_senders", "")
                     existing.spam_keywords = patterns.get("spam_keywords", "")
                     existing.delete_keywords = patterns.get("delete_keywords", "")
@@ -141,8 +142,8 @@ def run_worker():
                 
                 # Setup per-user reporter
                 user_bot = None
-                if acc.telegram_chat_id and BOT_TOKEN:
-                    user_bot = TelegramSender(bot_token=BOT_TOKEN, chat_id=acc.telegram_chat_id)
+                if acc.discord_channel_id and DISCORD_BOT_TOKEN:
+                    user_bot = DiscordSender(bot_token=DISCORD_BOT_TOKEN, channel_id=int(acc.discord_channel_id))
 
                 fetcher = EmailFetcher(
                     email=acc.email,

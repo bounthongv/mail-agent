@@ -5,14 +5,14 @@ schedule:
 
 # AI Settings
 ai:
-  provider: "ollama"
-  model: "kimi-k2.5:cloud"
+  provider: "nvidia"
+  model: "meta/llama-3.1-8b-instruct"
   max_tokens: 300
   temperature: 0.3
 
 # Local AI / Notebook Settings
 localai:
-  enabled: true
+  enabled: false
   provider: "ollama"
   # Primary: Windows Server (Fastest)
   model: "llama3.2:3b"
@@ -20,7 +20,7 @@ localai:
 
   # Secondary: Ubuntu Server (Fallback)
   secondary_url: "http://202.137.147.5:11434/api/generate"
-  secondary_model: "glm-4.6:cloud"
+  secondary_model: "gemma3:4b"
 
 # Report Settings
 report:

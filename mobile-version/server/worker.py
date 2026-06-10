@@ -22,7 +22,7 @@ from core.gemini_summarizer import GeminiSummarizer
 from core.huggingface_summarizer import HuggingFaceSummarizer
 from core.nvidia_summarizer import NvidiaSummarizer
 from core.local_summarizer import LocalSummarizer
-from reports.telegram_sender import TelegramSender
+from reports.discord_sender import DiscordSender
 
 # === Load Server Config ===
 
@@ -68,11 +68,11 @@ def get_summarizer():
         # Default to Gemini
         return GeminiSummarizer(api_key=api_keys.get('gemini', ''))
 
-# Telegram bot (shared for all users)
-def get_telegram_sender():
-    """Get Telegram sender with shared bot token"""
-    bot_token = SERVER_CONFIG['telegram']['bot_token']
-    return TelegramSender(bot_token=bot_token, chat_id=0)  # chat_id set per user
+# Discord bot (shared for all users)
+def get_discord_sender():
+    """Get Discord sender with shared bot token"""
+    bot_token = SERVER_CONFIG['discord']['bot_token']
+    return DiscordSender(bot_token=bot_token, channel_id=0)  # channel_id set per user
 
 # === Worker Functions ===
 
@@ -96,12 +96,12 @@ def cleanup_old_summaries(db, retention_days: int = 30):
     if deleted > 0:
         print(f"🗑️  Cleaned up {deleted} old summaries (older than {retention_days} days)")
 
-def process_user_emails(user_data: Dict, summarizer, telegram_sender, db):
+def process_user_emails(user_data: Dict, summarizer, discord_sender, db):
     """Process emails for a single user"""
     user_id = user_data['user_id']
     config = user_data['config']
-    
-    telegram_chat_id = config.get('telegram_chat_id')
+
+    discord_channel_id = config.get('discord_channel_id')
     emails = config.get('emails', [])
     patterns = config.get('patterns', {})
     
@@ -181,10 +181,10 @@ def process_user_emails(user_data: Dict, summarizer, telegram_sender, db):
                 db.commit()
                 summaries_created += 1
                 
-                # Send to Telegram
-                if telegram_chat_id:
-                    telegram_sender.chat_id = int(telegram_chat_id)
-                    telegram_sender.send_summary({
+                # Send to Discord
+                if discord_channel_id:
+                    discord_sender.channel_id = int(discord_channel_id)
+                    discord_sender.send_summary({
                         'summarized': [{
                             'subject': email.subject,
                             'summary': summary_text,
@@ -218,37 +218,37 @@ def run_worker():
     # Initialize database
     init_db()
     
-    # Get summarizer and telegram
+    # Get summarizer and discord
     summarizer = get_summarizer()
-    telegram_sender = get_telegram_sender()
-    
+    discord_sender = get_discord_sender()
+
     interval = SERVER_CONFIG['worker']['interval_minutes'] * 60
     retention_days = SERVER_CONFIG['retention']['days']
-    
+
     while True:
         try:
             db = SessionLocal()
-            
+
             print(f"\n⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Starting check...")
-            
+
             # Get all user configs
             user_configs = get_all_user_configs(db)
             print(f"👥 Found {len(user_configs)} active users")
-            
+
             if not user_configs:
                 print("   No users configured yet. Waiting for mobile sync...")
             else:
                 total_summaries = 0
-                
+
                 for user_data in user_configs:
                     user_id = user_data['user_id']
                     print(f"\n👤 Processing user: {user_id}")
-                    
+
                     summaries = process_user_emails(
-                        user_data, summarizer, telegram_sender, db
+                        user_data, summarizer, discord_sender, db
                     )
                     total_summaries += summaries
-                
+
                 print(f"\n✅ Done! Created {total_summaries} summaries")
             
             # Cleanup old summaries

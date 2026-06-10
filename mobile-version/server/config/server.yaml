@@ -22,11 +22,11 @@ local_ai:
   windows_url: "http://209.126.1.13:11434/api/generate"
   ubuntu_url: "http://202.137.147.5:11434/api/generate"
 
-# Telegram Bot Configuration
+# Discord Bot Configuration
 # One bot token serves ALL users
-# Each user has their own chat_id (stored in their mobile config)
-telegram:
-  bot_token: "YOUR_TELEGRAM_BOT_TOKEN_HERE"
+# Each user has their own channel_id (stored in their mobile config)
+discord:
+  bot_token: "YOUR_DISCORD_BOT_TOKEN_HERE"
 
 # Worker Configuration
 worker:

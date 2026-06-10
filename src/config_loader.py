@@ -16,9 +16,9 @@ class EmailConfig:
 
 
 @dataclass
-class TelegramConfig:
+class DiscordConfig:
     bot_token: str
-    chat_id: int
+    channel_id: int
 
 
 @dataclass
@@ -89,7 +89,7 @@ class AppConfig:
     ai: AIConfig
     report: ReportConfig
     emails: List[EmailConfig]
-    telegram: TelegramConfig
+    discord: DiscordConfig
     openrouter: OpenRouterConfig
     deepseek: DeepSeekConfig
     gemini: GeminiConfig
@@ -154,9 +154,9 @@ def load_config(config_dir: str = "config") -> AppConfig:
         for e in credentials['emails']
     ]
 
-    telegram = TelegramConfig(
-        bot_token=credentials['telegram']['bot_token'],
-        chat_id=credentials['telegram']['chat_id']
+    discord = DiscordConfig(
+        bot_token=credentials['discord']['bot_token'],
+        channel_id=credentials['discord']['channel_id']
     )
 
     openrouter = OpenRouterConfig(
@@ -198,7 +198,7 @@ def load_config(config_dir: str = "config") -> AppConfig:
         ai=ai,
         report=report,
         emails=emails,
-        telegram=telegram,
+        discord=discord,
         openrouter=openrouter,
         deepseek=deepseek,
         gemini=gemini,

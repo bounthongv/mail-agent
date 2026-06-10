@@ -579,16 +579,16 @@ class MailAgentTray:
 
                         print(f"📊 Results: " + " | ".join(stats))
 
-                    # Only send Telegram report if processing completed successfully and not timed out
+                    # Only send Discord report if processing completed successfully and not timed out
                     if not timed_out[0] and self.config.report.daily_summary and report['summarized_count'] > 0:
-                        print("📤 Sending report to Telegram...")
+                        print("📤 Sending report to Discord...")
 
                         result = [None]
                         exception_occurred = [None]
 
                         def send_report():
                             try:
-                                result[0] = self.agent.telegram_sender.send_summary(report)
+                                result[0] = self.agent.discord_sender.send_summary(report)
                             except Exception as e:
                                 exception_occurred[0] = e
 
@@ -598,13 +598,13 @@ class MailAgentTray:
                         thread.join(timeout=30)  # 30 second timeout
 
                         if thread.is_alive():
-                            print("📤 Telegram report: ⏳ Timeout")
+                            print("📤 Discord report: ⏳ Timeout")
                         elif exception_occurred[0]:
-                            print(f"📤 Telegram report: ❌ Error - {exception_occurred[0]}")
+                            print(f"📤 Discord report: ❌ Error - {exception_occurred[0]}")
                         else:
                             success = result[0]
                             status = "✅ Sent" if success else "❌ Failed"
-                            print(f"📤 Telegram report: {status}")
+                            print(f"📤 Discord report: {status}")
 
                 finally:
                     # Always restore streams and flush any remaining buffer

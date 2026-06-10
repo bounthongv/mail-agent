@@ -12,8 +12,8 @@ class SetupWizard:
         self.root.geometry("600x500")
         
         self.emails = []
-        self.telegram_token = ""
-        self.telegram_chat_id = ""
+        self.discord_token = ""
+        self.discord_channel_id = ""
         
         self.create_ui()
     

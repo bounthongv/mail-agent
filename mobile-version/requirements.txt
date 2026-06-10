@@ -3,6 +3,6 @@ sqlalchemy
 pyyaml
 requests
 imap-tools
-python-telegram-bot
+discord.py
 python-dotenv
 bcrypt

@@ -28,7 +28,7 @@ from summarizer.huggingface_summarizer import HuggingFaceSummarizer
 from summarizer.nvidia_summarizer import NvidiaSummarizer
 from summarizer.groq_summarizer import GroqSummarizer
 from summarizer.local_summarizer import LocalSummarizer
-from reports.telegram_sender import TelegramSender
+from reports.discord_sender import DiscordSender
 from scheduler import Scheduler
 
 
@@ -168,9 +168,9 @@ class MailAgent:
                 print("Using Local Ollama (final fallback)")
                 self.summarizer = self.ollama_summarizer
 
-        self.telegram_sender = TelegramSender(
-            bot_token=config.telegram.bot_token,
-            chat_id=config.telegram.chat_id
+        self.discord_sender = DiscordSender(
+            bot_token=config.discord.bot_token,
+            channel_id=config.discord.channel_id
         )
 
     def run_once(self, check_stop=None) -> Dict:
@@ -434,7 +434,7 @@ class MailAgent:
                 print(f"  [Tier 1 Failed] {summary[:60]}...")
 
             # --- Tier 2: Local AI (Secondary - Windows) ---
-            if self.windows_summarizer:
+            if self.config.localai.enabled and self.windows_summarizer:
                 print(f"  [Tier 2] Trying Windows AI at {self.windows_summarizer.url}...")
                 summary = self.windows_summarizer.summarize(email_data)
                 if not summary.startswith("[Error:") and not summary.startswith("[Ollama error"):
@@ -522,9 +522,9 @@ def main():
             print(f"  - Telegram messages: {len(report['summarized'])}")
 
             if config.report.daily_summary:
-                print(f"\nSending report to Telegram...")
-                if agent.telegram_sender.send_summary(report):
-                    print("Report sent to Telegram")
+                print(f"\nSending report to Discord...")
+                if agent.discord_sender.send_summary(report):
+                    print("Report sent to Discord")
                 else:
                     print("Failed to send report!")
 

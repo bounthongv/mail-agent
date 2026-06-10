@@ -17,7 +17,7 @@ python -m PyInstaller ^
     --add-data="src;src" ^
     --hidden-import="pystray._win32" ^
     --hidden-import="PIL._tkinter_finder" ^
-    --hidden-import="telegram" ^
+    --hidden-import="discord" ^
     --hidden-import="imap_tools" ^
     --hidden-import="yaml" ^
     --hidden-import="requests" ^

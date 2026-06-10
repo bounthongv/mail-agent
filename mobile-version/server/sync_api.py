@@ -59,7 +59,7 @@ class PatternConfig(BaseModel):
 
 class UserConfigSync(BaseModel):
     user_id: str
-    telegram_chat_id: str
+    discord_channel_id: str
     emails: List[EmailAccount]
     patterns: PatternConfig
     last_sync_time: Optional[datetime] = None

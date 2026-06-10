@@ -20,7 +20,7 @@ def test_summary():
     print("\n2. Summary...")
     config = load_config()
     print(f"   Email(s): {', '.join([e.email for e in config.emails])}")
-    print(f"   Telegram Chat ID: {config.telegram.chat_id}")
+    print(f"   Discord Channel ID: {config.discord.channel_id}")
     print(f"   Primary AI: {config.ai.provider} ({config.ai.model})")
     if config.localai.enabled:
         print(f"   Local AI (Ollama): Enabled")
